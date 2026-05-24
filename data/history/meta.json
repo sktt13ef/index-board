@@ -1,0 +1,146 @@
+{
+  "CSI300": {
+    "last_update": 1779557390.3376784,
+    "record_count": 482,
+    "date_range": {
+      "start": "2024-05-27",
+      "end": "2026-05-22"
+    }
+  },
+  "CSI500": {
+    "last_update": 1779557954.0133684,
+    "record_count": 482,
+    "date_range": {
+      "start": "2024-05-27",
+      "end": "2026-05-22"
+    }
+  },
+  "HSTECH": {
+    "last_update": 1779557363.8775995,
+    "record_count": 489,
+    "date_range": {
+      "start": "2024-05-27",
+      "end": "2026-05-22"
+    }
+  },
+  "NDX": {
+    "last_update": 1779557779.9485517,
+    "record_count": 499,
+    "date_range": {
+      "start": "2024-05-28",
+      "end": "2026-05-22"
+    }
+  },
+  "GOLD": {
+    "last_update": 1779557366.5428727,
+    "record_count": 514,
+    "date_range": {
+      "start": "2024-05-27",
+      "end": "2026-05-22"
+    }
+  },
+  "OIL_WTI": {
+    "last_update": 1779557365.0888588,
+    "record_count": 514,
+    "date_range": {
+      "start": "2024-05-27",
+      "end": "2026-05-22"
+    }
+  },
+  "CN10Y": {
+    "last_update": 1779564384.5693924,
+    "record_count": 2498,
+    "date_range": {
+      "start": "2016-05-26",
+      "end": "2026-05-22"
+    }
+  },
+  "US10Y": {
+    "last_update": 1779564406.6232648,
+    "record_count": 2495,
+    "date_range": {
+      "start": "2016-06-01",
+      "end": "2026-05-22"
+    }
+  },
+  "CSI_BAIJIU": {
+    "last_update": 1779558134.9923372,
+    "record_count": 482,
+    "date_range": {
+      "start": "2024-05-27",
+      "end": "2026-05-22"
+    }
+  },
+  "HSI": {
+    "last_update": 1779557439.169538,
+    "record_count": 56,
+    "date_range": {
+      "start": "2026-03-02",
+      "end": "2026-05-22"
+    }
+  },
+  "DAX": {
+    "last_update": 1779557209.0339828,
+    "record_count": 499,
+    "date_range": {
+      "start": "2024-05-28",
+      "end": "2026-05-22"
+    }
+  },
+  "XOP": {
+    "last_update": 1779558925.1446164,
+    "record_count": 499,
+    "date_range": {
+      "start": "2024-05-28",
+      "end": "2026-05-22"
+    }
+  },
+  "WANJIA_GOLD": {
+    "last_update": 1779564411.5224411,
+    "record_count": 157,
+    "date_range": {
+      "start": "2025-09-18",
+      "end": "2026-05-22"
+    }
+  },
+  "CSI_DIVIDEND": {
+    "last_update": 1779559685.1606247,
+    "record_count": 482,
+    "date_range": {
+      "start": "2024-05-27",
+      "end": "2026-05-22"
+    }
+  },
+  "STAR100": {
+    "last_update": 1779560479.5184553,
+    "record_count": 482,
+    "date_range": {
+      "start": "2024-05-27",
+      "end": "2026-05-22"
+    }
+  },
+  "STAR50": {
+    "last_update": 1779560485.589585,
+    "record_count": 482,
+    "date_range": {
+      "start": "2024-05-27",
+      "end": "2026-05-22"
+    }
+  },
+  "CHINEXT": {
+    "last_update": 1779560518.0703037,
+    "record_count": 482,
+    "date_range": {
+      "start": "2024-05-27",
+      "end": "2026-05-22"
+    }
+  },
+  "SPX": {
+    "last_update": 1779563747.3437803,
+    "record_count": 2548,
+    "date_range": {
+      "start": "2016-04-07",
+      "end": "2026-05-22"
+    }
+  }
+}

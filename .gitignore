@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.log
+*.err
+.env
+.venv/
+venv/
+data/history/*.csv
+valuation_data/
+*.bat
