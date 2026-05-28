@@ -1,10 +1,14 @@
 __pycache__/
 *.py[cod]
+*.pyc
 *.log
 *.err
 .env
 .venv/
 venv/
+.runtime/
 data/history/*.csv
 valuation_data/
+run_dev.py
+*.vbs
 *.bat

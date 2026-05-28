@@ -270,6 +270,33 @@
         .upill-realtime { background: rgba(240,64,64,.09); color: #f06060; }
         .upill-daily    { background: rgba(245,166,35,.09); color: #f5a623; }
         .upill-delayed  { background: rgba(78,140,255,.09); color: #5a9aff; }
+        .meta-tags {
+            display: flex; flex-wrap: wrap; gap: 4px;
+            margin-top: 8px;
+        }
+        .meta-tag {
+            font-size: 9px; font-weight: 700;
+            padding: 2px 6px; border-radius: 4px;
+            border: 1px solid var(--border);
+            color: var(--text-2); background: rgba(255,255,255,.03);
+        }
+        .tag-official { color: var(--down); background: rgba(30,187,114,.09); }
+        .tag-quasi { color: var(--bond); background: rgba(34,211,238,.09); }
+        .tag-third { color: #f5a623; background: rgba(245,166,35,.09); }
+        .tag-delay { color: #5a9aff; background: rgba(78,140,255,.09); }
+        .tag-calc { color: var(--accent); background: rgba(78,140,255,.09); }
+        .tag-proxy { color: #f5a623; background: rgba(245,166,35,.12); border-color: rgba(245,166,35,.28); }
+
+        .disclaimer {
+            margin-bottom: 14px;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-2);
+            background: rgba(255,255,255,.025);
+            font-size: 12px;
+            line-height: 1.55;
+        }
 
         .c-cny {
             display: flex; align-items: baseline; justify-content: space-between;
@@ -388,11 +415,38 @@
         .d-close:hover { background: rgba(255,255,255,.06); color: var(--text-1); }
         .d-close svg { width: 14px; height: 14px; }
 
+        .dmeta {
+            flex-shrink: 0;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+            padding: 9px 20px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-2);
+            font-size: 10px;
+        }
+        .dm { min-width: 0; }
+        .dm-k { color: var(--text-3); margin-bottom: 2px; }
+        .dm-v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .dm-v a { color: inherit; text-decoration: none; }
+
         .dchart {
             flex: 1; min-height: 0;
             position: relative; padding: 14px 20px 18px;
         }
         .dchart canvas { width: 100% !important; height: 100% !important; }
+        .chart-note {
+            position: absolute; top: 8px; left: 20px; right: 20px;
+            z-index: 6;
+            display: flex; align-items: center; gap: 8px;
+            padding: 6px 8px;
+            border: 1px solid rgba(245,166,35,.25);
+            border-radius: 7px;
+            background: rgba(245,166,35,.1);
+            color: #f5a623;
+            font-size: 11px; font-weight: 700;
+        }
+        .chart-note.hidden { display: none; }
 
         .c-overlay {
             position: absolute; inset: 0;
@@ -425,6 +479,7 @@
             .grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
             .c-price { font-size: 20px; }
             :root { --drawer-h: 290px; }
+            .dmeta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 480px) {
             .grid { grid-template-columns: 1fr; }
@@ -480,6 +535,9 @@
 </header>
 
 <main class="main" id="main">
+    <div class="disclaimer">
+        本页面数据仅供看盘参考，不构成投资建议；第三方免费行情可能延迟或存在字段解释差异，关键投资判断请回源官方页面复核。分位和“定投”提示为项目规则生成，不是官方评级。
+    </div>
     <div class="grid" id="grid">
         <div class="loading-state"><div class="ls-spin"></div>正在加载…</div>
     </div>
@@ -511,7 +569,9 @@
             </div>
         </div>
     </div>
+    <div class="dmeta" id="d-meta"></div>
     <div class="dchart">
+        <div class="chart-note hidden" id="chart-note"></div>
         <div class="c-overlay" id="c-loading"><div class="c-spin"></div><span>加载中…</span></div>
         <div class="c-overlay hidden" id="c-empty"></div>
         <canvas id="chart"></canvas>
@@ -580,6 +640,45 @@ function themeClrs() {
         ttTx: lt ? '#0f172a'             : '#e8ecf4',
     };
 }
+function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, m => ({
+        '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+    }[m]));
+}
+function fmtTime(s) {
+    if (!s) return '';
+    const d = new Date(s);
+    return isNaN(d) ? s : d.toLocaleString('zh-CN');
+}
+function sourceTags(d) {
+    const tags = [];
+    const st = d.source_type;
+    if (st === '官方') tags.push(['官方', 'official']);
+    else if (st === '准官方') tags.push(['准官方', 'quasi']);
+    else if (st === '第三方') tags.push(['第三方', 'third']);
+    if (d.update_frequency === 'delayed' || (d.delay_note || '').includes('延迟')) tags.push(['延迟', 'delay']);
+    if (d.valuation && d.valuation.is_calculated_metric) tags.push(['项目计算', 'calc']);
+    if (d.history_source_type === 'ETF_PROXY') tags.push(['ETF代理', 'proxy']);
+    return tags.map(([label, cls]) => `<span class="meta-tag tag-${cls}">${label}</span>`).join('');
+}
+function pctLabel(v) {
+    if (!v) return '';
+    if (v.percentile_label) return v.percentile_label;
+    const window = v.percentile_window || (v.years_of_data ? `样本约${Number(v.years_of_data).toFixed(1)}年` : '样本区间有限');
+    if (v.is_price_percentile) return `价格分位，${window}`;
+    if (v.pe_percentile != null) return `PE分位，${window}`;
+    return window;
+}
+function chartMetaFromPayload(payload) {
+    if (Array.isArray(payload)) {
+        const first = payload[0] || {};
+        return { rows: payload, meta: first };
+    }
+    return {
+        rows: payload && Array.isArray(payload.rows) ? payload.rows : [],
+        meta: (payload && payload.meta) || {},
+    };
+}
 
 // ── build card ──
 function mkCard(key, d) {
@@ -603,14 +702,13 @@ function mkCard(key, d) {
         if (v.is_price_percentile) {
             const pct  = v.price_percentile;
             const tone = pct <= 20 ? 'danger' : pct <= 60 ? 'warn' : 'muted';
-            const yrs  = v.years_of_data || '';
             const lbl  = v.signal_label || '';
             const minV = v.price_min != null ? v.price_min.toLocaleString() : '—';
             const maxV = v.price_max != null ? v.price_max.toLocaleString() : '—';
             return `
         <div class="c-pe">
             <div class="pe-l">
-                <span class="pe-k">${yrs}年分位</span>
+                <span class="pe-k">${esc(pctLabel(v))}</span>
                 <span class="pe-v pct-${tone}">${pct}%</span>
                 <span class="pe-p pct-lbl-${tone}">${lbl}</span>
             </div>
@@ -618,11 +716,11 @@ function mkCard(key, d) {
         </div>`;
         }
         // PE 型
-        const lbl = +v.years_of_data >= 9 ? '十年PE' : `${v.years_of_data}年PE`;
+        const lbl = pctLabel(v) || 'PE分位';
         return `
         <div class="c-pe">
             <div class="pe-l">
-                <span class="pe-k">${lbl}</span>
+                <span class="pe-k">${esc(lbl)}</span>
                 <span class="pe-v">${v.pe}</span>
                 <span class="pe-p">${v.pe_percentile}%分位</span>
                 ${v.dividend_yield ? `<span class="pe-dy">${v.dividend_yield}%</span>` : ''}
@@ -664,6 +762,7 @@ function mkCard(key, d) {
         </div>
         ${d.cny_per_gram ? `<div class="c-cny"><span class="cny-k">人民币</span><span class="cny-v">¥${d.cny_per_gram.toFixed(2)}<span class="cny-u">/g</span></span></div>` : ''}
         ${pe}
+        <div class="meta-tags">${sourceTags(d)}</div>
         <div class="c-foot">
             <span class="c-src">${srcH}</span>
             <span class="upill upill-${d.update_frequency||'realtime'}">${utag(d)}</span>
@@ -819,6 +918,32 @@ function updateDrawer(key) {
     const src = d.actual_source_label || d.source_label || '';
     document.getElementById('status-txt').textContent =
         [t ? `更新 ${t}` : '', src, utag(d)].filter(Boolean).join('  ·  ');
+
+    const surl = d.actual_source_url || d.source_url || '';
+    const srcHtml = surl
+        ? `<a href="${esc(surl)}" target="_blank" rel="noopener">${esc(src)}</a>`
+        : esc(src || '—');
+    const v = d.valuation || {};
+    const official = d.is_official_source ? '是' : (d.source_type === '准官方' ? '准官方' : '否');
+    const calc = v.is_calculated_metric ? '是，项目计算' : '否';
+    const note = [
+        d.data_note,
+        d.delay_note,
+        v.metric_note,
+        v.signal_rule_note,
+        d.history_source_type === 'ETF_PROXY' ? d.history_note : ''
+    ].filter(Boolean).join(' ');
+    document.getElementById('d-meta').innerHTML = `
+        <div class="dm"><div class="dm-k">数据源</div><div class="dm-v">${srcHtml}</div></div>
+        <div class="dm"><div class="dm-k">数据时点</div><div class="dm-v">${esc(d.data_as_of || d.trade_date || '—')}</div></div>
+        <div class="dm"><div class="dm-k">抓取时间</div><div class="dm-v">${esc(fmtTime(d.fetched_at || d.timestamp) || '—')}</div></div>
+        <div class="dm"><div class="dm-k">来源标签</div><div class="dm-v">${sourceTags(d) || '—'}</div></div>
+        <div class="dm"><div class="dm-k">分位口径</div><div class="dm-v">${esc(pctLabel(v) || '—')}</div></div>
+        <div class="dm"><div class="dm-k">样本区间</div><div class="dm-v">${esc([v.data_start, v.data_end].filter(Boolean).join(' 至 ') || v.percentile_window || '—')}</div></div>
+        <div class="dm"><div class="dm-k">是否官方源</div><div class="dm-v">${official}</div></div>
+        <div class="dm"><div class="dm-k">数据口径说明</div><div class="dm-v" title="${esc(note)}">${esc(note || '—')}</div></div>
+        <div class="dm"><div class="dm-k">是否项目计算</div><div class="dm-v">${calc}</div></div>
+    `;
 }
 
 // ── drawer ──
@@ -851,14 +976,16 @@ function reloadChart() { if (selected) loadChart(selected, period); }
 
 async function loadChart(key, p) {
     const d = stocks[key];
+    hideChartNote();
     if (d && d.history_available === false) {
         killChart(); showEmpty(d.history_note || '暂无历史图表'); hideLd(); return;
     }
     showLd();
     try {
         const res  = await fetch(`/api/history/${key}?period=${p}`);
-        const data = await res.json();
-        if (data && data.length) drawChart(data, d);
+        const payload = await res.json();
+        const { rows, meta } = chartMetaFromPayload(payload);
+        if (rows && rows.length) drawChart(rows, d, meta);
         else { killChart(); showEmpty('暂无历史数据'); }
     } catch { killChart(); showEmpty('加载失败'); }
     finally  { hideLd(); }
@@ -866,8 +993,14 @@ async function loadChart(key, p) {
 
 function killChart() { if (chart) { chart.destroy(); chart=null; } }
 
-function drawChart(data, info) {
+function drawChart(data, info, meta) {
     hideEmpty();
+    const chartMeta = meta || {};
+    if (chartMeta.history_source_type === 'ETF_PROXY') {
+        showChartNote(`${chartMeta.chart_badge || 'ETF代理'}历史，仅供趋势参考`);
+    } else {
+        hideChartNote();
+    }
     const ctx    = document.getElementById('chart').getContext('2d');
     const c      = themeClrs();
     const labels = data.map(d => d.date);
@@ -914,6 +1047,8 @@ function showLd()    { hideEmpty(); document.getElementById('c-loading').classLi
 function hideLd()    { document.getElementById('c-loading').classList.add('hidden'); }
 function showEmpty(m){ const e=document.getElementById('c-empty'); e.textContent=m; e.classList.remove('hidden'); }
 function hideEmpty() { document.getElementById('c-empty').classList.add('hidden'); }
+function showChartNote(m) { const e=document.getElementById('chart-note'); e.textContent=m; e.classList.remove('hidden'); }
+function hideChartNote() { document.getElementById('chart-note').classList.add('hidden'); }
 
 // ── period tabs ──
 document.querySelectorAll('.ptab').forEach(t => t.addEventListener('click', function(e) {

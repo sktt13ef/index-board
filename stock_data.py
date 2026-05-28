@@ -42,6 +42,22 @@ class StockDataProvider:
     # 用月频 PE-TTM 历史计算近10年滚动市盈率分位（multpl.com 推导，基于标普官方EPS）
     MULTPL_PE_KEYS = {"SPX"}
     MULTPL_PE_CACHE_TTL_HOURS = 12
+    SOURCE_TYPE_BY_SOURCE = {
+        "csindex_official": "官方",
+        "csindex": "官方",
+        "hsi_daily_bulletin": "官方",
+        "us_treasury": "官方",
+        "deutsche_boerse": "官方",
+        "nasdaq_official": "官方",
+        "chinabond": "准官方",
+        "sina": "第三方",
+        "eastmoney": "第三方",
+        "eastmoney_quote": "第三方",
+        "fund_nav": "第三方",
+        "dax_etf": "第三方",
+        "etf_estimate": "项目计算",
+        "etf_to_index": "项目计算",
+    }
     """股票数据提供者 - 使用新浪财经和东方财富API"""
 
     # 指数配置
@@ -147,7 +163,9 @@ class StockDataProvider:
             "source_label": "中证指数官网",
             "source_url": "https://www.csindex.com.cn/#/indices/family/detail?indexCode=H30269",
             "history_etf_proxy": "sh560150",
-            "history_note": "历史走势图基于跟踪ETF(sh560150)实时校准至指数点位，趋势真实，绝对点位仅供参考。",
+            "history_source_type": "ETF_PROXY",
+            "chart_badge": "ETF代理",
+            "history_note": "历史走势使用 ETF 代理数据，仅供趋势参考，不等同于中证指数官方历史点位。",
             "data_note": "官方日更快照；按收盘后数据展示。",
             "base_pe": 7.74,  # 雪球数据：2025年PE-TTM约7.74，近十年百分位73.73%
             "base_pe_percentile": 73.73,  # 雪球：近十年百分位73.73%
@@ -332,6 +350,76 @@ class StockDataProvider:
             "https": None,
         }
 
+    def _source_type_for(self, source: str) -> str | None:
+        return self.SOURCE_TYPE_BY_SOURCE.get(source)
+
+    def _delay_note_for(self, source_type: str | None, update_frequency: str | None) -> str | None:
+        if update_frequency == "delayed":
+            return "延迟行情，仅供参考"
+        if source_type == "第三方":
+            return "第三方免费行情，仅供参考"
+        return None
+
+    def _sample_window_label(self, years: float | int | None) -> str | None:
+        if years in (None, ""):
+            return None
+        try:
+            value = float(years)
+        except Exception:
+            return None
+        if value >= 9.5:
+            return "样本近10年"
+        if value <= 0:
+            return "样本区间有限"
+        return f"样本约{value:.1f}年"
+
+    def _metric_type_for(self, key: str, valuation: dict) -> str | None:
+        if not valuation:
+            return None
+        if valuation.get("is_price_percentile"):
+            if key in {"CN10Y", "US10Y"}:
+                return "收益率分位"
+            if key == "WANJIA_GOLD":
+                return "净值分位"
+            return "价格分位"
+        if key in self.MULTPL_PE_KEYS:
+            return "月频PE分位"
+        if valuation.get("pe_percentile") is not None:
+            return "PE分位"
+        return None
+
+    def _enrich_valuation_metadata(self, key: str, valuation: dict | None) -> dict | None:
+        if not valuation:
+            return valuation
+
+        valuation = dict(valuation)
+        metric_type = valuation.get("percentile_type") or self._metric_type_for(key, valuation)
+        window = valuation.get("percentile_window") or self._sample_window_label(valuation.get("years_of_data"))
+        source = valuation.get("source")
+        source_type = "项目计算" if valuation.get("is_price_percentile") else None
+        if key in self.MULTPL_PE_KEYS:
+            source_type = "第三方"
+        elif source == "中证指数官网":
+            source_type = "官方"
+
+        valuation.setdefault("percentile_type", metric_type)
+        valuation.setdefault("percentile_window", window or "样本区间有限")
+        if metric_type:
+            valuation.setdefault(
+                "percentile_label",
+                f"{metric_type}，{valuation['percentile_window']}",
+            )
+        valuation.setdefault("is_calculated_metric", metric_type is not None)
+        valuation.setdefault(
+            "metric_note",
+            "分位和提示由本项目基于历史序列计算，不是官方评级或投资建议。"
+            if metric_type else None,
+        )
+        valuation.setdefault("source_type", source_type)
+        valuation.setdefault("is_official_source", source_type == "官方")
+        valuation.setdefault("signal_rule_note", "项目规则生成，不是官方评级，不构成投资建议。")
+        return valuation
+
     def _is_snapshot_fresh(self) -> bool:
         if not self.cache or not self.last_update:
             return False
@@ -385,8 +473,14 @@ class StockDataProvider:
             "delayed": "延迟",
         }.get(result.get("update_frequency"), result.get("update_frequency")))
         result.setdefault("fetched_at", result.get("timestamp"))
+        source_type = self._source_type_for(result.get("source"))
+        result.setdefault("source_type", source_type)
+        result.setdefault("is_official_source", source_type == "官方")
+        result.setdefault("delay_note", self._delay_note_for(source_type, result.get("update_frequency")))
+        result.setdefault("is_calculated_metric", False)
         if key in self._valuation_cache:
-            result["valuation"] = self._valuation_cache[key]
+            result["valuation"] = self._enrich_valuation_metadata(key, self._valuation_cache[key])
+            result["is_calculated_metric"] = bool(result["valuation"].get("is_calculated_metric"))
         return result
 
     def _fetch_index_data(self, config: dict) -> dict:
@@ -1601,13 +1695,19 @@ class StockDataProvider:
     def get_valuation_data(self, key: str, current_price: float = None) -> dict:
         """只返回可验证的真实估值数据"""
         if key in self.DAILY_VALUATION_KEYS:
-            return self._decorate_valuation_signal(self.get_csindex_pe_valuation(key))
+            return self._enrich_valuation_metadata(
+                key,
+                self._decorate_valuation_signal(self.get_csindex_pe_valuation(key)),
+            )
 
         if key in self.MULTPL_PE_KEYS:
-            return self._decorate_valuation_signal(self.get_spx_pe_valuation())
+            return self._enrich_valuation_metadata(
+                key,
+                self._decorate_valuation_signal(self.get_spx_pe_valuation()),
+            )
 
         if key in self.PRICE_PERCENTILE_KEYS:
-            return self._compute_price_percentile_valuation(key)
+            return self._enrich_valuation_metadata(key, self._compute_price_percentile_valuation(key))
 
         if key not in self.REALTIME_VALUATION_KEYS:
             return None
@@ -1619,7 +1719,10 @@ class StockDataProvider:
 
             official_daily_data = self.get_csindex_pe_valuation(key)
             if official_daily_data:
-                return self._decorate_valuation_signal(official_daily_data)
+                return self._enrich_valuation_metadata(
+                    key,
+                    self._decorate_valuation_signal(official_daily_data),
+                )
 
             print(f"  [{name}] 尝试实时获取估值数据...")
             realtime_data = RealtimeValuationProvider.get_realtime_valuation(key, config)
@@ -1649,7 +1752,10 @@ class StockDataProvider:
                 except Exception as exc:
                     print(f"  [{name}] 历史PE范围补全失败: {exc}")
 
-            return self._decorate_valuation_signal(realtime_data)
+            return self._enrich_valuation_metadata(
+                key,
+                self._decorate_valuation_signal(realtime_data),
+            )
         except Exception as e:
             print(f"获取估值数据失败 {key}: {e}")
             return None
@@ -1699,6 +1805,7 @@ class StockDataProvider:
                 "data_points": len(pe_values),
                 "years_of_data": round((data_end - data_start).days / 365, 1),
                 "source": "中证指数官网",
+                "source_url": config.get("source_url", "https://www.csindex.com.cn/"),
                 "is_realtime": False,
                 "is_simulated": False,
                 "note": f"官方日频PE，截至 {data_end.strftime('%Y-%m-%d')}",
@@ -2223,12 +2330,33 @@ class StockDataProvider:
                             }
                             for row in data
                         ]
-                return self._merge_realtime_snapshot_into_history(key, data)
+                return self._decorate_history_rows(
+                    key,
+                    self._merge_realtime_snapshot_into_history(key, data),
+                )
             return []
             return []
         except Exception as e:
             print(f"获取历史数据失败 {key}: {e}")
             return []
+
+    def _decorate_history_rows(self, key: str, data: list) -> list:
+        """Attach chart-level metadata while keeping the API response as an array."""
+        if not data:
+            return data
+        config = self.INDICES.get(key, {})
+        if config.get("history_source_type") != "ETF_PROXY":
+            return data
+
+        note = "历史走势使用 ETF 代理数据，仅供趋势参考，不等同于中证指数官方历史点位。"
+        meta = {
+            "history_source_type": "ETF_PROXY",
+            "chart_badge": "ETF代理",
+            "data_note": note,
+            "history_note": note,
+            "history_proxy_symbol": config.get("history_etf_proxy"),
+        }
+        return [{**row, **meta} for row in data]
 
     def _merge_realtime_snapshot_into_history(self, key: str, data: list) -> list:
         """用当前已验证快照补齐图表最后一个交易日，避免卡片和图表不同步。"""

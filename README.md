@@ -1,19 +1,47 @@
 # index-board
 
-多市场指数看板：实时/日更行情、十年 PE 分位、历史走势、卡片拖拽排序。
+多市场指数看板：实时/日更行情、PE/价格/收益率/净值分位、历史走势、卡片拖拽排序。
 
 ## 功能
 
 - 沪深300、A500、红利低波、白酒、创业板、科创50/100
 - 恒生、恒科、纳指、DAX、黄金、原油、XOP、万家周期视野C
 - 中/美十年期国债收益率
-- 卡片估值指标（官方 PE 或 10 年价格/收益率分位）
+- 卡片估值指标（官方/第三方 PE 序列，或项目计算的价格/收益率/净值分位；样本窗口按实际数据展示）
 - 按估值便宜→贵排序
 - 底部抽屉历史图
 
 ## 数据说明
 
 详见 [DATA_SOURCES.md](DATA_SOURCES.md)
+
+---
+
+## 本地校验
+
+启动本地服务后运行：
+
+```powershell
+.\.runtime\python\python.exe validate_data_quality.py
+.\.runtime\python\python.exe smoke_test.py
+```
+
+如果系统 `python` 命令可用，也可以运行：
+
+```powershell
+python validate_data_quality.py
+python smoke_test.py
+```
+
+### 发布前检查清单
+
+- 页面能打开
+- `/api/stocks` 返回 18 张卡片
+- `/api/history/CSI_DIVIDEND` 带 `ETF_PROXY` 标注
+- 页面可见总免责声明
+- `CSI_DIVIDEND` 图表可见“ETF代理历史，仅供趋势参考”
+- `validate_data_quality.py` 通过
+- `smoke_test.py` 通过
 
 ---
 
@@ -237,6 +265,7 @@ index-board/
 ├── update_history_data.py      # 更新历史数据
 ├── local_valuation_calculator.py  # 本地估值计算器
 ├── validate_data_quality.py    # 数据质量验证
+├── smoke_test.py                # 最小HTTP回归检查
 ├── requirements.txt            # Python 依赖
 ├── data/history/               # 历史数据缓存目录
 ├── templates/
