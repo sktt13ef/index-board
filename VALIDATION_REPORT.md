@@ -1,6 +1,6 @@
 # 数据质量硬门槛报告
 
-生成时间：2026-07-03 14:51:03
+生成时间：2026-07-03 15:07:42
 
 结果汇总：PASS 683，WARN 0，FAIL 0。
 
@@ -36,7 +36,7 @@
 | PASS | CSI300 | change_math | OK |
 | PASS | CSI300 | change_pct_math | OK |
 | PASS | CSI300 | source_trust | 官方 |
-| PASS | CSI300 | freshness | 29s |
+| PASS | CSI300 | freshness | 28s |
 | PASS | CSI300 | valuation_scope | OK |
 | PASS | CSI500 | card_field:update_label | OK |
 | PASS | CSI500 | card_field:source_label | OK |
@@ -60,7 +60,7 @@
 | PASS | CSI500_INDEX | change_math | OK |
 | PASS | CSI500_INDEX | change_pct_math | OK |
 | PASS | CSI500_INDEX | source_trust | 官方 |
-| PASS | CSI500_INDEX | freshness | 26s |
+| PASS | CSI500_INDEX | freshness | 25s |
 | PASS | CSI500_INDEX | valuation_scope | OK |
 | PASS | CSI_DIVIDEND | card_field:update_label | OK |
 | PASS | CSI_DIVIDEND | card_field:source_label | OK |
@@ -84,7 +84,7 @@
 | PASS | CSI_DIVIDEND_100 | change_math | OK |
 | PASS | CSI_DIVIDEND_100 | change_pct_math | OK |
 | PASS | CSI_DIVIDEND_100 | source_trust | 官方 |
-| PASS | CSI_DIVIDEND_100 | freshness | 23s |
+| PASS | CSI_DIVIDEND_100 | freshness | 22s |
 | PASS | CSI_DIVIDEND_100 | valuation_scope | OK |
 | PASS | CSI300_DIVIDEND_LOW_VOL | card_field:update_label | OK |
 | PASS | CSI300_DIVIDEND_LOW_VOL | card_field:source_label | OK |
@@ -96,7 +96,7 @@
 | PASS | CSI300_DIVIDEND_LOW_VOL | change_math | OK |
 | PASS | CSI300_DIVIDEND_LOW_VOL | change_pct_math | OK |
 | PASS | CSI300_DIVIDEND_LOW_VOL | source_trust | 官方 |
-| PASS | CSI300_DIVIDEND_LOW_VOL | freshness | 22s |
+| PASS | CSI300_DIVIDEND_LOW_VOL | freshness | 21s |
 | PASS | CSI300_DIVIDEND_LOW_VOL | valuation_scope | OK |
 | PASS | CSI_DIVIDEND_QUALITY | card_field:update_label | OK |
 | PASS | CSI_DIVIDEND_QUALITY | card_field:source_label | OK |
@@ -132,7 +132,7 @@
 | PASS | CSI_CASH_FLOW | change_math | OK |
 | PASS | CSI_CASH_FLOW | change_pct_math | OK |
 | PASS | CSI_CASH_FLOW | source_trust | 官方 |
-| PASS | CSI_CASH_FLOW | freshness | 20s |
+| PASS | CSI_CASH_FLOW | freshness | 19s |
 | PASS | CSI_CASH_FLOW | valuation_scope | OK |
 | PASS | CNI_FREE_CASH_FLOW | card_field:update_label | OK |
 | PASS | CNI_FREE_CASH_FLOW | card_field:source_label | OK |
@@ -228,7 +228,7 @@
 | PASS | HSTECH | change_math | OK |
 | PASS | HSTECH | change_pct_math | OK |
 | PASS | HSTECH | source_trust | 第三方 |
-| PASS | HSTECH | freshness | 29s |
+| PASS | HSTECH | freshness | 27s |
 | PASS | HSTECH | valuation_scope | OK |
 | PASS | HSI | card_field:update_label | OK |
 | PASS | HSI | card_field:source_label | OK |
@@ -240,7 +240,7 @@
 | PASS | HSI | change_math | OK |
 | PASS | HSI | change_pct_math | OK |
 | PASS | HSI | source_trust | 官方 |
-| PASS | HSI | freshness | 27s |
+| PASS | HSI | freshness | 26s |
 | PASS | HSI | valuation_scope | OK |
 | PASS | DAX | card_field:update_label | OK |
 | PASS | DAX | card_field:source_label | OK |
@@ -252,7 +252,7 @@
 | PASS | DAX | change_math | OK |
 | PASS | DAX | change_pct_math | OK |
 | PASS | DAX | source_trust | 官方 |
-| PASS | DAX | freshness | 70968s |
+| PASS | DAX | freshness | 71968s |
 | PASS | DAX | valuation_scope | OK |
 | PASS | NDX | card_field:update_label | OK |
 | PASS | NDX | card_field:source_label | OK |
@@ -349,7 +349,7 @@
 | PASS | CSI1000 | change_math | OK |
 | PASS | CSI1000 | change_pct_math | OK |
 | PASS | CSI1000 | source_trust | 官方 |
-| PASS | CSI1000 | freshness | 25s |
+| PASS | CSI1000 | freshness | 24s |
 | PASS | CSI1000 | valuation_scope | OK |
 | PASS | CSI2000 | card_field:update_label | OK |
 | PASS | CSI2000 | card_field:source_label | OK |
@@ -361,7 +361,7 @@
 | PASS | CSI2000 | change_math | OK |
 | PASS | CSI2000 | change_pct_math | OK |
 | PASS | CSI2000 | source_trust | 官方 |
-| PASS | CSI2000 | freshness | 24s |
+| PASS | CSI2000 | freshness | 23s |
 | PASS | CSI2000 | valuation_scope | OK |
 | PASS | EU10Y | card_field:update_label | OK |
 | PASS | EU10Y | card_field:source_label | OK |
