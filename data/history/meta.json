@@ -1,146 +1,926 @@
 {
   "CSI300": {
-    "last_update": 1779557390.3376784,
-    "record_count": 482,
+    "last_update": 1783046305.8629208,
+    "record_count": 5219,
+    "series": "price",
+    "source": "tx",
+    "source_symbol": "sh000300",
+    "source_signature": "history-v5-provenance|tx|sh000300|||||||||",
     "date_range": {
-      "start": "2024-05-27",
-      "end": "2026-05-22"
+      "start": "2005-01-04",
+      "end": "2026-07-02"
     }
   },
   "CSI500": {
-    "last_update": 1779557954.0133684,
-    "record_count": 482,
+    "last_update": 1783046310.2323055,
+    "record_count": 758,
+    "series": "price",
+    "source": "tx",
+    "source_symbol": "sh000510",
+    "source_signature": "history-v5-provenance|tx|sh000510|||||||||",
     "date_range": {
-      "start": "2024-05-27",
-      "end": "2026-05-22"
+      "start": "2023-05-17",
+      "end": "2026-07-02"
     }
   },
   "HSTECH": {
-    "last_update": 1779557363.8775995,
-    "record_count": 489,
+    "last_update": 1783059495.8504424,
+    "record_count": 1441,
+    "series": "price",
+    "source": "hk_sina",
+    "source_symbol": "HSTECH",
+    "source_signature": "history-v5-provenance|hk_sina|HSTECH|||||||||",
     "date_range": {
-      "start": "2024-05-27",
-      "end": "2026-05-22"
+      "start": "2020-08-17",
+      "end": "2026-07-02"
     }
   },
   "NDX": {
-    "last_update": 1779557779.9485517,
-    "record_count": 499,
+    "last_update": 1782993923.45137,
+    "record_count": 10343,
+    "series": "price",
+    "source": "yahoo_chart",
+    "source_symbol": "^NDX",
+    "source_signature": "history-v5-provenance|yahoo_chart|^NDX|||||||",
     "date_range": {
-      "start": "2024-05-28",
-      "end": "2026-05-22"
+      "start": "1985-10-01",
+      "end": "2026-07-01"
     }
   },
   "GOLD": {
-    "last_update": 1779557366.5428727,
-    "record_count": 514,
+    "last_update": 1782993911.4932785,
+    "record_count": 6560,
+    "series": "price",
+    "source": "yahoo_chart",
+    "source_symbol": "GC=F",
+    "source_signature": "history-v5-provenance|yahoo_chart|GC=F|||||||",
     "date_range": {
-      "start": "2024-05-27",
-      "end": "2026-05-22"
+      "start": "2000-08-30",
+      "end": "2026-07-02"
     }
   },
   "OIL_WTI": {
-    "last_update": 1779557365.0888588,
-    "record_count": 514,
+    "last_update": 1782993909.159637,
+    "record_count": 6631,
+    "series": "price",
+    "source": "yahoo_chart",
+    "source_symbol": "CL=F",
+    "source_signature": "history-v5-provenance|yahoo_chart|CL=F|||||||",
     "date_range": {
-      "start": "2024-05-27",
-      "end": "2026-05-22"
+      "start": "2000-08-23",
+      "end": "2026-07-02"
     }
   },
   "CN10Y": {
-    "last_update": 1779564384.5693924,
-    "record_count": 2498,
+    "last_update": 1783046875.512925,
+    "record_count": 5086,
+    "series": "price",
+    "source": "chinabond",
+    "source_symbol": "CN10Y",
+    "source_signature": "history-v5-provenance|chinabond|CN10Y|||||||||",
     "date_range": {
-      "start": "2016-05-26",
-      "end": "2026-05-22"
+      "start": "2006-03-01",
+      "end": "2026-07-02"
     }
   },
   "US10Y": {
-    "last_update": 1779564406.6232648,
-    "record_count": 2495,
+    "last_update": 1783046936.6809442,
+    "record_count": 7505,
+    "series": "price",
+    "source": "us_treasury",
+    "source_symbol": "US10Y",
+    "source_signature": "history-v5-provenance|us_treasury|US10Y|||BC_10YEAR||||||",
     "date_range": {
-      "start": "2016-06-01",
-      "end": "2026-05-22"
+      "start": "1996-07-01",
+      "end": "2026-07-02"
     }
   },
   "CSI_BAIJIU": {
-    "last_update": 1779558134.9923372,
-    "record_count": 482,
+    "last_update": 1783046324.238885,
+    "record_count": 2683,
+    "series": "price",
+    "source": "tx",
+    "source_symbol": "sz399997",
+    "source_signature": "history-v5-provenance|tx|sz399997|||||||||",
     "date_range": {
-      "start": "2024-05-27",
-      "end": "2026-05-22"
+      "start": "2015-06-16",
+      "end": "2026-07-02"
     }
   },
   "HSI": {
-    "last_update": 1779557439.169538,
-    "record_count": 56,
+    "last_update": 1783046358.8058486,
+    "record_count": 3164,
+    "series": "price",
+    "source": "hk_sina",
+    "source_symbol": "HSI",
+    "source_signature": "history-v5-provenance|hk_sina|HSI|||||||||",
     "date_range": {
-      "start": "2026-03-02",
-      "end": "2026-05-22"
+      "start": "2013-08-20",
+      "end": "2026-07-02"
     }
   },
   "DAX": {
-    "last_update": 1779557209.0339828,
-    "record_count": 499,
+    "last_update": 1783046359.9759996,
+    "record_count": 9745,
+    "series": "price",
+    "source": "stoxx_dax",
+    "source_symbol": "DAXK",
+    "source_signature": "history-v5-provenance|stoxx_dax|DAXK||3mo|||||||",
     "date_range": {
-      "start": "2024-05-28",
-      "end": "2026-05-22"
+      "start": "1987-12-30",
+      "end": "2026-07-02"
     }
   },
   "XOP": {
-    "last_update": 1779558925.1446164,
-    "record_count": 499,
+    "last_update": 1782989864.4025426,
+    "record_count": 5037,
+    "series": "price",
+    "source": "yahoo_chart",
+    "source_symbol": "XOP",
+    "source_signature": "history-v5-provenance|yahoo_chart|XOP|||||||",
     "date_range": {
-      "start": "2024-05-28",
-      "end": "2026-05-22"
+      "start": "2006-06-22",
+      "end": "2026-07-01"
     }
   },
   "WANJIA_GOLD": {
-    "last_update": 1779564411.5224411,
-    "record_count": 157,
+    "last_update": 1783046365.7437792,
+    "record_count": 185,
+    "series": "price",
+    "source": "fund_nav",
+    "source_symbol": "025446",
+    "source_signature": "history-v5-provenance|fund_nav|025446|||||||||",
     "date_range": {
       "start": "2025-09-18",
-      "end": "2026-05-22"
+      "end": "2026-07-02"
     }
   },
   "CSI_DIVIDEND": {
-    "last_update": 1779559685.1606247,
-    "record_count": 482,
+    "last_update": 1783046185.646067,
+    "record_count": 4980,
+    "series": "price",
+    "source": "csindex_perf",
+    "source_symbol": "H30269",
+    "source_signature": "history-v5-provenance|csindex_perf|H30269|||||||||",
     "date_range": {
-      "start": "2024-05-27",
-      "end": "2026-05-22"
+      "start": "1990-01-01",
+      "end": "2026-07-02"
     }
   },
   "STAR100": {
-    "last_update": 1779560479.5184553,
-    "record_count": 482,
+    "last_update": 1783046355.665181,
+    "record_count": 1001,
+    "series": "price",
+    "source": "tx",
+    "source_symbol": "sh000698",
+    "source_signature": "history-v5-provenance|tx|sh000698|||||||||",
     "date_range": {
-      "start": "2024-05-27",
-      "end": "2026-05-22"
+      "start": "2022-05-18",
+      "end": "2026-07-02"
     }
   },
   "STAR50": {
-    "last_update": 1779560485.589585,
-    "record_count": 482,
+    "last_update": 1783046350.5001724,
+    "record_count": 1573,
+    "series": "price",
+    "source": "tx",
+    "source_symbol": "sh000688",
+    "source_signature": "history-v5-provenance|tx|sh000688|||||||||",
     "date_range": {
-      "start": "2024-05-27",
-      "end": "2026-05-22"
+      "start": "2020-01-02",
+      "end": "2026-07-02"
     }
   },
   "CHINEXT": {
-    "last_update": 1779560518.0703037,
-    "record_count": 482,
+    "last_update": 1783046342.4079757,
+    "record_count": 3904,
+    "series": "price",
+    "source": "tx",
+    "source_symbol": "sz399006",
+    "source_signature": "history-v5-provenance|tx|sz399006|||||||||",
     "date_range": {
-      "start": "2024-05-27",
-      "end": "2026-05-22"
+      "start": "2010-06-01",
+      "end": "2026-07-02"
     }
   },
   "SPX": {
-    "last_update": 1779563747.3437803,
-    "record_count": 2548,
+    "last_update": 1782989862.3820043,
+    "record_count": 14246,
+    "series": "price",
+    "source": "yahoo_chart",
+    "source_symbol": "^GSPC",
+    "source_signature": "history-v5-provenance|yahoo_chart|^GSPC|||||||",
     "date_range": {
-      "start": "2016-04-07",
-      "end": "2026-05-22"
+      "start": "1970-01-02",
+      "end": "2026-07-01"
+    }
+  },
+  "CSI_DIVIDEND:total_return": {
+    "last_update": 1783046187.5693452,
+    "record_count": 4981,
+    "series": "total_return",
+    "source": "csindex_perf",
+    "source_symbol": "H20269",
+    "source_signature": "history-v5-provenance|csindex_perf|H20269|||||||||",
+    "date_range": {
+      "start": "1990-01-01",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI_DIVIDEND_100": {
+    "last_update": 1783046190.0033884,
+    "record_count": 4980,
+    "series": "price",
+    "source": "csindex_perf",
+    "source_symbol": "930955",
+    "source_signature": "history-v5-provenance|csindex_perf|930955|||||||||",
+    "date_range": {
+      "start": "1990-01-01",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI_DIVIDEND_100:total_return": {
+    "last_update": 1783046192.0546038,
+    "record_count": 4981,
+    "series": "total_return",
+    "source": "csindex_perf",
+    "source_symbol": "H20955",
+    "source_signature": "history-v5-provenance|csindex_perf|H20955|||||||||",
+    "date_range": {
+      "start": "1990-01-01",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI300_DIVIDEND_LOW_VOL": {
+    "last_update": 1783046194.3650281,
+    "record_count": 5222,
+    "series": "price",
+    "source": "csindex_perf",
+    "source_symbol": "930740",
+    "source_signature": "history-v5-provenance|csindex_perf|930740|||||||||",
+    "date_range": {
+      "start": "1990-01-01",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI300_DIVIDEND_LOW_VOL:total_return": {
+    "last_update": 1783046196.3820927,
+    "record_count": 5222,
+    "series": "total_return",
+    "source": "csindex_perf",
+    "source_symbol": "H20740",
+    "source_signature": "history-v5-provenance|csindex_perf|H20740|||||||||",
+    "date_range": {
+      "start": "1990-01-01",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI300:total_return": {
+    "last_update": 1783046306.6181357,
+    "record_count": 5223,
+    "series": "total_return",
+    "source": "csindex_perf",
+    "source_symbol": "H00300",
+    "source_signature": "history-v5-provenance|csindex_perf|H00300|||||||||",
+    "date_range": {
+      "start": "1990-01-01",
+      "end": "2026-07-02"
+    }
+  },
+  "HSTECH:total_return": {
+    "last_update": 1782823092.4253893,
+    "record_count": 1432,
+    "series": "total_return",
+    "source": "yahoo_chart",
+    "source_symbol": "3033.HK",
+    "source_signature": "history-v3-all-clean|yahoo_chart|3033.HK||",
+    "date_range": {
+      "start": "2020-08-27",
+      "end": "2026-06-30"
+    }
+  },
+  "HSI:total_return": {
+    "last_update": 1782823097.052099,
+    "record_count": 4554,
+    "series": "total_return",
+    "source": "yahoo_chart",
+    "source_symbol": "2800.HK",
+    "source_signature": "history-v3-all-clean|yahoo_chart|2800.HK||",
+    "date_range": {
+      "start": "2008-01-02",
+      "end": "2026-06-30"
+    }
+  },
+  "STAR50:total_return": {
+    "last_update": 1783046351.2073252,
+    "record_count": 1576,
+    "series": "total_return",
+    "source": "csindex_perf",
+    "source_symbol": "000688CNY01",
+    "source_signature": "history-v5-provenance|csindex_perf|000688CNY01|||||||||",
+    "date_range": {
+      "start": "1990-01-01",
+      "end": "2026-07-02"
+    }
+  },
+  "GOLD:total_return": {
+    "last_update": 1782823125.6756554,
+    "record_count": 6481,
+    "series": "total_return",
+    "source": "yahoo_chart",
+    "source_symbol": "GC=F",
+    "source_signature": "history-v3-all-clean|yahoo_chart|GC=F||",
+    "date_range": {
+      "start": "2000-08-30",
+      "end": "2026-06-30"
+    }
+  },
+  "SPX:total_return": {
+    "last_update": 1782823106.908656,
+    "record_count": 9694,
+    "series": "total_return",
+    "source": "yahoo_chart",
+    "source_symbol": "^SP500TR",
+    "source_signature": "history-v3-all-clean|yahoo_chart|^SP500TR||",
+    "date_range": {
+      "start": "1988-01-04",
+      "end": "2026-06-29"
+    }
+  },
+  "XOP:total_return": {
+    "last_update": 1782823111.4045594,
+    "record_count": 5035,
+    "series": "total_return",
+    "source": "yahoo_chart",
+    "source_symbol": "XOP",
+    "source_signature": "history-v3-all-clean|yahoo_chart|XOP||",
+    "date_range": {
+      "start": "2006-06-22",
+      "end": "2026-06-29"
+    }
+  },
+  "NDX:total_return": {
+    "last_update": 1782823101.8136694,
+    "record_count": 6868,
+    "series": "total_return",
+    "source": "yahoo_chart",
+    "source_symbol": "QQQ",
+    "source_signature": "history-v3-all-clean|yahoo_chart|QQQ||",
+    "date_range": {
+      "start": "1999-03-10",
+      "end": "2026-06-29"
+    }
+  },
+  "CSI500:total_return": {
+    "last_update": 1783046311.07234,
+    "record_count": 5222,
+    "series": "total_return",
+    "source": "csindex_perf",
+    "source_symbol": "000510CNY010",
+    "source_signature": "history-v5-provenance|csindex_perf|000510CNY010|||||||||",
+    "date_range": {
+      "start": "1990-01-01",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI_BAIJIU:total_return": {
+    "last_update": 1783046325.2316103,
+    "record_count": 4252,
+    "series": "total_return",
+    "source": "csindex_perf",
+    "source_symbol": "H20539",
+    "source_signature": "history-v5-provenance|csindex_perf|H20539|||||||||",
+    "date_range": {
+      "start": "1990-01-01",
+      "end": "2026-07-02"
+    }
+  },
+  "CHINEXT:total_return": {
+    "last_update": 1782823058.4428365,
+    "record_count": 3903,
+    "series": "total_return",
+    "source": "tx",
+    "source_symbol": "sz399606",
+    "source_signature": "history-v3-all-clean|tx|sz399606||",
+    "date_range": {
+      "start": "2010-06-01",
+      "end": "2026-06-30"
+    }
+  },
+  "STAR100:total_return": {
+    "last_update": 1783046356.4135647,
+    "record_count": 1576,
+    "series": "total_return",
+    "source": "csindex_perf",
+    "source_symbol": "000698CNY010",
+    "source_signature": "history-v5-provenance|csindex_perf|000698CNY010|||||||||",
+    "date_range": {
+      "start": "1990-01-01",
+      "end": "2026-07-02"
+    }
+  },
+  "WANJIA_GOLD:total_return": {
+    "last_update": 1782823115.994239,
+    "record_count": 183,
+    "series": "total_return",
+    "source": "fund_nav_accum",
+    "source_symbol": "025446",
+    "source_signature": "history-v3-all-clean|fund_nav_accum|025446||",
+    "date_range": {
+      "start": "2025-09-18",
+      "end": "2026-06-30"
+    }
+  },
+  "DAX:total_return": {
+    "last_update": 1783046361.0164678,
+    "record_count": 9736,
+    "series": "total_return",
+    "source": "stoxx_dax",
+    "source_symbol": "DAX",
+    "source_signature": "history-v5-provenance|stoxx_dax|DAX||3mo|||||||",
+    "date_range": {
+      "start": "1987-12-30",
+      "end": "2026-07-02"
+    }
+  },
+  "OIL_WTI:total_return": {
+    "last_update": 1782823130.0783012,
+    "record_count": 6489,
+    "series": "total_return",
+    "source": "yahoo_chart",
+    "source_symbol": "CL=F",
+    "source_signature": "history-v3-all-clean|yahoo_chart|CL=F||",
+    "date_range": {
+      "start": "2000-08-23",
+      "end": "2026-06-30"
+    }
+  },
+  "CN10Y:total_return": {
+    "last_update": 1782823253.012933,
+    "record_count": 2145,
+    "series": "total_return",
+    "source": "yahoo_chart",
+    "source_symbol": "511260.SS",
+    "source_signature": "history-v3-all-clean|yahoo_chart|511260.SS||",
+    "date_range": {
+      "start": "2017-08-04",
+      "end": "2026-06-30"
+    }
+  },
+  "US10Y:total_return": {
+    "last_update": 1782823393.7498124,
+    "record_count": 6017,
+    "series": "total_return",
+    "source": "yahoo_chart",
+    "source_symbol": "IEF",
+    "source_signature": "history-v3-all-clean|yahoo_chart|IEF||",
+    "date_range": {
+      "start": "2002-07-30",
+      "end": "2026-06-29"
+    }
+  },
+  "CSI_DIVIDEND_QUALITY": {
+    "last_update": 1783046198.5220487,
+    "record_count": 5220,
+    "series": "price",
+    "source": "csindex_perf",
+    "source_symbol": "931468",
+    "source_signature": "history-v5-provenance|csindex_perf|931468|||||||||",
+    "date_range": {
+      "start": "2004-12-31",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI_DIVIDEND_QUALITY:total_return": {
+    "last_update": 1783046200.5028608,
+    "record_count": 5220,
+    "series": "total_return",
+    "source": "csindex_perf",
+    "source_symbol": "921468",
+    "source_signature": "history-v5-provenance|csindex_perf|921468|||||||||",
+    "date_range": {
+      "start": "2004-12-31",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI_ALL_DIVIDEND_QUALITY": {
+    "last_update": 1783046202.1578,
+    "record_count": 3038,
+    "series": "price",
+    "source": "csindex_perf",
+    "source_symbol": "932315",
+    "source_signature": "history-v5-provenance|csindex_perf|932315|||||||||",
+    "date_range": {
+      "start": "2013-12-31",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI_ALL_DIVIDEND_QUALITY:total_return": {
+    "last_update": 1783046203.7237022,
+    "record_count": 3038,
+    "series": "total_return",
+    "source": "csindex_perf",
+    "source_symbol": "932315CNY010",
+    "source_signature": "history-v5-provenance|csindex_perf|932315CNY010|||||||||",
+    "date_range": {
+      "start": "2013-12-31",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI_CASH_FLOW": {
+    "last_update": 1783046205.4559731,
+    "record_count": 3038,
+    "series": "price",
+    "source": "csindex_perf",
+    "source_symbol": "932365",
+    "source_signature": "history-v5-provenance|csindex_perf|932365|||||||||",
+    "date_range": {
+      "start": "2013-12-31",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI_CASH_FLOW:total_return": {
+    "last_update": 1783046207.0370479,
+    "record_count": 3038,
+    "series": "total_return",
+    "source": "csindex_perf",
+    "source_symbol": "932365CNY010",
+    "source_signature": "history-v5-provenance|csindex_perf|932365CNY010|||||||||",
+    "date_range": {
+      "start": "2013-12-31",
+      "end": "2026-07-02"
+    }
+  },
+  "CNI_FREE_CASH_FLOW": {
+    "last_update": 1783046182.5817442,
+    "record_count": 3276,
+    "series": "price",
+    "source": "cni_official",
+    "source_symbol": "980092",
+    "source_signature": "history-v5-provenance|cni_official|980092|||||||||",
+    "date_range": {
+      "start": "2012-12-31",
+      "end": "2026-07-02"
+    }
+  },
+  "CNI_FREE_CASH_FLOW:total_return": {
+    "last_update": 1783046183.540601,
+    "record_count": 3276,
+    "series": "total_return",
+    "source": "cni_official",
+    "source_symbol": "480092",
+    "source_signature": "history-v5-provenance|cni_official|480092|||||||||",
+    "date_range": {
+      "start": "2012-12-31",
+      "end": "2026-07-02"
+    }
+  },
+  "CN1Y": {
+    "last_update": 1782978948.4404407,
+    "record_count": 5085,
+    "series": "price",
+    "source": "chinabond",
+    "source_symbol": "CN1Y",
+    "source_signature": "history-v5-provenance|chinabond|CN1Y||||oneYear||",
+    "date_range": {
+      "start": "2006-03-01",
+      "end": "2026-07-01"
+    }
+  },
+  "CN30Y": {
+    "last_update": 1782979010.745659,
+    "record_count": 5085,
+    "series": "price",
+    "source": "chinabond",
+    "source_symbol": "CN30Y",
+    "source_signature": "history-v5-provenance|chinabond|CN30Y||||thirtyYear||",
+    "date_range": {
+      "start": "2006-03-01",
+      "end": "2026-07-01"
+    }
+  },
+  "US2Y": {
+    "last_update": 1782979018.9719691,
+    "record_count": 7482,
+    "series": "price",
+    "source": "us_treasury",
+    "source_symbol": "US2Y",
+    "source_signature": "history-v5-provenance|us_treasury|US2Y|||BC_2YEAR|||",
+    "date_range": {
+      "start": "1996-08-01",
+      "end": "2026-07-01"
+    }
+  },
+  "CN10Y_1Y_SPREAD": {
+    "last_update": 1782979010.9354436,
+    "record_count": 5085,
+    "series": "price",
+    "source": "computed_spread",
+    "source_symbol": "CN10Y_1Y_SPREAD",
+    "source_signature": "history-v5-provenance|computed_spread|CN10Y_1Y_SPREAD||||||CN10Y,CN1Y",
+    "date_range": {
+      "start": "2006-03-01",
+      "end": "2026-07-01"
+    }
+  },
+  "CN_US_10Y_SPREAD": {
+    "last_update": 1782974885.6060152,
+    "record_count": 2332,
+    "series": "price",
+    "source": "computed_spread",
+    "source_symbol": "CN_US_10Y_SPREAD",
+    "source_signature": "history-v5-provenance|computed_spread|CN_US_10Y_SPREAD||||||CN10Y,US10Y",
+    "date_range": {
+      "start": "2016-07-05",
+      "end": "2026-07-01"
+    }
+  },
+  "US3M": {
+    "last_update": 1782975166.3803616,
+    "record_count": 2502,
+    "series": "price",
+    "source": "yahoo_chart",
+    "source_symbol": "^IRX",
+    "source_signature": "history-v5-provenance|yahoo_chart|^IRX||||||",
+    "date_range": {
+      "start": "2016-07-01",
+      "end": "2026-06-26"
+    }
+  },
+  "CSI_ALL_SHARE": {
+    "last_update": 1783059851.1413958,
+    "record_count": 5221,
+    "series": "price",
+    "source": "csindex_perf",
+    "source_symbol": "000985",
+    "source_signature": "history-v5-provenance|csindex_perf|000985|||||||||",
+    "date_range": {
+      "start": "2004-12-31",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI_ALL_SHARE:total_return": {
+    "last_update": 1783046369.4585114,
+    "record_count": 5222,
+    "series": "total_return",
+    "source": "csindex_perf",
+    "source_symbol": "H00985",
+    "source_signature": "history-v5-provenance|csindex_perf|H00985|||||||||",
+    "date_range": {
+      "start": "2004-12-31",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI1000": {
+    "last_update": 1783046370.1918743,
+    "record_count": 5220,
+    "series": "price",
+    "source": "csindex_perf",
+    "source_symbol": "000852",
+    "source_signature": "history-v5-provenance|csindex_perf|000852|||||||||",
+    "date_range": {
+      "start": "2005-01-04",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI1000:total_return": {
+    "last_update": 1783046370.9503057,
+    "record_count": 33,
+    "series": "total_return",
+    "source": "csindex_perf",
+    "source_symbol": "H00852",
+    "source_signature": "history-v5-provenance|csindex_perf|H00852|||||||||",
+    "date_range": {
+      "start": "2026-05-18",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI2000": {
+    "last_update": 1783046371.6804955,
+    "record_count": 3038,
+    "series": "price",
+    "source": "csindex_perf",
+    "source_symbol": "932000",
+    "source_signature": "history-v5-provenance|csindex_perf|932000|||||||||",
+    "date_range": {
+      "start": "2013-12-31",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI2000:total_return": {
+    "last_update": 1783046372.3840592,
+    "record_count": 33,
+    "series": "total_return",
+    "source": "csindex_perf",
+    "source_symbol": "932000CNY010",
+    "source_signature": "history-v5-provenance|csindex_perf|932000CNY010|||||||||",
+    "date_range": {
+      "start": "2026-05-18",
+      "end": "2026-07-02"
+    }
+  },
+  "US10Y_2Y_SPREAD": {
+    "last_update": 1782979019.1694038,
+    "record_count": 2498,
+    "series": "price",
+    "source": "computed_spread",
+    "source_symbol": "US10Y_2Y_SPREAD",
+    "source_signature": "history-v5-provenance|computed_spread|US10Y_2Y_SPREAD||||||US10Y,US2Y",
+    "date_range": {
+      "start": "2016-07-05",
+      "end": "2026-07-01"
+    }
+  },
+  "BTCUSD": {
+    "last_update": 1782993154.758581,
+    "record_count": 4001,
+    "series": "price",
+    "source": "coinbase_candles",
+    "source_symbol": "BTC-USD",
+    "source_signature": "history-v5-provenance|coinbase_candles|BTC-USD|||||||",
+    "date_range": {
+      "start": "2015-07-20",
+      "end": "2026-07-02"
+    }
+  },
+  "EU10Y": {
+    "last_update": 1783059503.604088,
+    "record_count": 5577,
+    "series": "price",
+    "source": "ecb_yield",
+    "source_symbol": "EU10Y",
+    "source_signature": "history-v5-provenance|ecb_yield|EU10Y|||||YC.B.U2.EUR.4F.G_N_A.SV_C_YM.SR_10Y||||",
+    "date_range": {
+      "start": "2004-09-06",
+      "end": "2026-07-01"
+    }
+  },
+  "CAC40": {
+    "last_update": 1782993919.2627184,
+    "record_count": 2560,
+    "series": "price",
+    "source": "yahoo_chart",
+    "source_symbol": "^FCHI",
+    "source_signature": "history-v5-provenance|yahoo_chart|^FCHI|||||||",
+    "date_range": {
+      "start": "2016-07-01",
+      "end": "2026-07-02"
+    }
+  },
+  "FTSE100": {
+    "last_update": 1783046947.2152338,
+    "record_count": 10739,
+    "series": "price",
+    "source": "lse_dory",
+    "source_symbol": ".FTSE",
+    "source_signature": "history-v5-provenance|lse_dory|.FTSE||||||1984-01-01|||",
+    "date_range": {
+      "start": "1984-01-03",
+      "end": "2026-07-02"
+    }
+  },
+  "VIX": {
+    "last_update": 1783046260.462087,
+    "record_count": 9220,
+    "series": "price",
+    "source": "cboe_vix",
+    "source_symbol": "VIX",
+    "source_signature": "history-v5-provenance|cboe_vix|VIX|||||||||",
+    "date_range": {
+      "start": "1990-01-02",
+      "end": "2026-07-02"
+    }
+  },
+  "ETHUSD": {
+    "last_update": 1782993162.7810364,
+    "record_count": 3696,
+    "series": "price",
+    "source": "coinbase_candles",
+    "source_symbol": "ETH-USD",
+    "source_signature": "history-v5-provenance|coinbase_candles|ETH-USD|||||||",
+    "date_range": {
+      "start": "2016-05-18",
+      "end": "2026-07-02"
+    }
+  },
+  "FTSE100:total_return": {
+    "last_update": 1783046384.9751706,
+    "record_count": 2206,
+    "series": "total_return",
+    "source": "lse_dory",
+    "source_symbol": ".TRIUKX",
+    "source_signature": "history-v5-provenance|lse_dory|.TRIUKX||||||2017-10-06|||",
+    "date_range": {
+      "start": "2017-10-06",
+      "end": "2026-07-02"
+    }
+  },
+  "CNI_FREE_CASH_FLOW:dividend_yield": {
+    "last_update": 1783048071.2966602,
+    "record_count": 3024,
+    "series": "dividend_yield",
+    "source": "computed_dividend_yield",
+    "source_symbol": "980092",
+    "source_signature": "history-v5-provenance|computed_dividend_yield|980092|||||||price,total_return|252|daily-compounded-252-v2",
+    "date_range": {
+      "start": "2014-01-21",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI_DIVIDEND:dividend_yield": {
+    "last_update": 1783050556.198503,
+    "record_count": 20,
+    "series": "dividend_yield",
+    "source": "csindex_indicator",
+    "source_symbol": "H30269",
+    "source_signature": "history-v5-provenance|csindex_indicator|H30269||||||||||股息率1|True",
+    "date_range": {
+      "start": "2026-06-05",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI_DIVIDEND_100:dividend_yield": {
+    "last_update": 1783050557.4913373,
+    "record_count": 20,
+    "series": "dividend_yield",
+    "source": "csindex_indicator",
+    "source_symbol": "930955",
+    "source_signature": "history-v5-provenance|csindex_indicator|930955||||||||||股息率1|True",
+    "date_range": {
+      "start": "2026-06-05",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI300_DIVIDEND_LOW_VOL:dividend_yield": {
+    "last_update": 1783050558.3300536,
+    "record_count": 20,
+    "series": "dividend_yield",
+    "source": "csindex_indicator",
+    "source_symbol": "930740",
+    "source_signature": "history-v5-provenance|csindex_indicator|930740||||||||||股息率1|True",
+    "date_range": {
+      "start": "2026-06-05",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI_DIVIDEND_QUALITY:dividend_yield": {
+    "last_update": 1783050559.1066074,
+    "record_count": 20,
+    "series": "dividend_yield",
+    "source": "csindex_indicator",
+    "source_symbol": "931468",
+    "source_signature": "history-v5-provenance|csindex_indicator|931468||||||||||股息率1|True",
+    "date_range": {
+      "start": "2026-06-05",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI_ALL_DIVIDEND_QUALITY:dividend_yield": {
+    "last_update": 1783050559.8690932,
+    "record_count": 20,
+    "series": "dividend_yield",
+    "source": "csindex_indicator",
+    "source_symbol": "932315",
+    "source_signature": "history-v5-provenance|csindex_indicator|932315||||||||||股息率1|True",
+    "date_range": {
+      "start": "2026-06-05",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI_CASH_FLOW:dividend_yield": {
+    "last_update": 1783050560.6231458,
+    "record_count": 20,
+    "series": "dividend_yield",
+    "source": "csindex_indicator",
+    "source_symbol": "932365",
+    "source_signature": "history-v5-provenance|csindex_indicator|932365||||||||||股息率1|True",
+    "date_range": {
+      "start": "2026-06-05",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI_DIVIDEND:dividend_return": {
+    "last_update": 1783050555.3436923,
+    "record_count": 4726,
+    "series": "dividend_return",
+    "source": "computed_dividend_yield",
+    "source_symbol": "H30269",
+    "source_signature": "history-v5-provenance|computed_dividend_yield|H30269|||||||price,total_return|252|daily-compounded-252-v2",
+    "date_range": {
+      "start": "2007-01-19",
+      "end": "2026-07-02"
+    }
+  },
+  "CSI_DIVIDEND_100:dividend_return": {
+    "last_update": 1783050556.6850426,
+    "record_count": 4726,
+    "series": "dividend_return",
+    "source": "computed_dividend_yield",
+    "source_symbol": "930955",
+    "source_signature": "history-v5-provenance|computed_dividend_yield|930955|||||||price,total_return|252|daily-compounded-252-v2",
+    "date_range": {
+      "start": "2007-01-19",
+      "end": "2026-07-02"
     }
   }
 }

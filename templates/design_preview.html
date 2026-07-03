@@ -1,0 +1,1900 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title|default("市场看板 UI 设计稿") }}</title>
+    <link rel="icon" href="data:,">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --paper: #f4f7fb;
+            --panel: #ffffff;
+            --panel-soft: #f8fafc;
+            --ink: #172033;
+            --muted: #516178;
+            --faint: #75849a;
+            --line: #dfe6ef;
+            --blue: #2563eb;
+            --blue-soft: #eaf1ff;
+            --red: #e5484d;
+            --green: #1aa66a;
+            --amber: #d88718;
+            --shadow: 0 22px 56px rgba(26, 38, 58, .10);
+            --soft-shadow: 0 10px 28px rgba(26, 38, 58, .07);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            min-height: 100vh;
+            font-family: "Microsoft YaHei UI", "PingFang SC", "HarmonyOS Sans SC", sans-serif;
+            color: var(--ink);
+            background:
+                linear-gradient(180deg, #ffffff 0, var(--paper) 240px),
+                var(--paper);
+            font-variant-numeric: tabular-nums;
+            -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
+        }
+
+        button {
+            font: inherit;
+        }
+
+        .shell {
+            width: min(1720px, calc(100vw - 48px));
+            margin: 0 auto;
+            padding: 20px 0 38px;
+        }
+
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            display: grid;
+            grid-template-columns: minmax(170px, 1fr) auto minmax(170px, 1fr);
+            align-items: center;
+            gap: 20px;
+            height: 58px;
+            margin-bottom: 18px;
+            background: rgba(255, 255, 255, .82);
+            backdrop-filter: blur(18px);
+        }
+
+        .brand {
+            display: flex;
+            align-items: baseline;
+            gap: 9px;
+            font-weight: 900;
+        }
+
+        .brand-main {
+            font-size: 20px;
+            letter-spacing: 0;
+        }
+
+        .brand-mark {
+            color: var(--blue);
+        }
+
+        .brand-sub {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .tabs {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            background: #f8fafc;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
+        }
+
+        .tab {
+            min-width: 58px;
+            height: 34px;
+            padding: 0 14px;
+            border: 0;
+            border-radius: 10px;
+            background: transparent;
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        .tab.active {
+            background: var(--panel);
+            color: var(--ink);
+            box-shadow: 0 7px 18px rgba(26, 38, 58, .10);
+        }
+
+        .tools {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 9px;
+        }
+
+        .live {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 800;
+            margin-right: 6px;
+        }
+
+        .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 0 5px rgba(26, 166, 106, .12);
+        }
+
+        .icon-btn {
+            width: 36px;
+            height: 36px;
+            display: grid;
+            place-items: center;
+            border: 1px solid var(--line);
+            border-radius: 11px;
+            background: var(--panel);
+            color: var(--muted);
+            cursor: pointer;
+            box-shadow: var(--soft-shadow);
+        }
+
+        .icon-btn svg {
+            width: 16px;
+            height: 16px;
+            stroke-width: 2.2;
+        }
+
+        .lang-btn {
+            min-width: 42px;
+            padding: 0 10px;
+            font-size: 12px;
+            font-weight: 950;
+        }
+
+        .summary {
+            display: grid;
+            grid-template-columns: 1.2fr repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .summary-card {
+            min-height: 78px;
+            padding: 14px 16px;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            background: var(--panel);
+            box-shadow: var(--soft-shadow);
+        }
+
+        .summary-k {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }
+
+        .summary-v {
+            color: var(--ink);
+            font-size: 19px;
+            font-weight: 900;
+            line-height: 1.25;
+        }
+
+        .summary-note {
+            margin-top: 6px;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .workspace {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(520px, 620px);
+            align-items: start;
+            gap: 18px;
+        }
+
+        .workspace.sparse {
+            grid-template-columns: minmax(460px, 620px) minmax(620px, 720px);
+            justify-content: center;
+        }
+
+        .workspace.sparse .cards {
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+            gap: 12px;
+            align-items: stretch;
+            align-content: start;
+        }
+
+        .card {
+            position: relative;
+            min-height: 226px;
+            padding: 16px;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            background: var(--panel);
+            box-shadow: var(--soft-shadow);
+            cursor: pointer;
+            transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: "";
+            position: absolute;
+            inset: 0 0 auto;
+            height: 3px;
+            background: var(--market);
+            opacity: .75;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+            border-color: color-mix(in srgb, var(--market) 36%, var(--line));
+        }
+
+        .card.active {
+            border-color: var(--market);
+            box-shadow: 0 0 0 1px color-mix(in srgb, var(--market) 38%, transparent), var(--shadow);
+        }
+
+        .card-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .name {
+            font-size: 16px;
+            line-height: 1.25;
+            font-weight: 900;
+            color: var(--ink);
+        }
+
+        .symbol {
+            margin-top: 4px;
+            color: var(--faint);
+            font-size: 11px;
+            font-family: "Bahnschrift", Consolas, monospace;
+            font-weight: 700;
+        }
+
+        .badges {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 5px;
+            flex-shrink: 0;
+        }
+
+        .badge {
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: var(--badge-bg);
+            color: var(--badge-fg);
+            font-size: 11px;
+            font-weight: 900;
+            white-space: nowrap;
+        }
+
+        .signal {
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: #f2f5f9;
+            color: var(--muted);
+            font-size: 10px;
+            font-weight: 900;
+            white-space: nowrap;
+        }
+
+        .signal.danger {
+            background: #ffecec;
+            color: var(--red);
+        }
+
+        .signal.warn {
+            background: #fff6e5;
+            color: var(--amber);
+        }
+
+        .trust {
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: #eef2f7;
+            color: var(--muted);
+            font-size: 10px;
+            font-weight: 900;
+            white-space: nowrap;
+        }
+
+        .trust.official {
+            background: #e7f8ef;
+            color: #137a45;
+        }
+
+        .trust.third {
+            background: #fff6e5;
+            color: #a35d00;
+        }
+
+        .trust.warn {
+            background: #ffecec;
+            color: var(--red);
+        }
+
+        .price {
+            color: var(--tone);
+            font-family: "Bahnschrift", "DIN Alternate", Consolas, monospace;
+            font-size: 30px;
+            font-weight: 900;
+            line-height: 1;
+            margin-bottom: 9px;
+        }
+
+        .change {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 9px;
+            border-radius: 999px;
+            background: var(--tone-soft);
+            color: var(--tone);
+            font-size: 12px;
+            font-weight: 900;
+            margin-bottom: 14px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            border-top: 1px solid var(--line);
+            padding-top: 11px;
+            gap: 0;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat:not(:last-child) {
+            border-right: 1px solid var(--line);
+        }
+
+        .stat-k {
+            color: var(--faint);
+            font-size: 10px;
+            font-weight: 800;
+            margin-bottom: 4px;
+        }
+
+        .stat-v {
+            color: #334155;
+            font-family: "Bahnschrift", Consolas, monospace;
+            font-size: 12px;
+            font-weight: 850;
+        }
+
+        .valuation {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+            padding: 8px 9px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: var(--panel-soft);
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 800;
+        }
+
+        .valuation strong {
+            color: var(--blue);
+            font-size: 12px;
+        }
+
+        .source {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 12px;
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .cadence {
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: var(--blue-soft);
+            color: var(--blue);
+            font-size: 10px;
+            font-weight: 900;
+        }
+
+        .chart-shell {
+            position: sticky;
+            top: 82px;
+            z-index: 10;
+            width: 100%;
+            height: min(650px, calc(100vh - 110px));
+            min-height: 520px;
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .chart-shell.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .chart-panel {
+            display: grid;
+            grid-template-rows: auto minmax(0, 1fr);
+            height: 100%;
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            background: rgba(255,255,255,.96);
+            box-shadow: 0 24px 70px rgba(26, 38, 58, .16);
+            overflow: hidden;
+            backdrop-filter: blur(18px);
+        }
+
+        .chart-side {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 6px 18px;
+            align-items: start;
+            padding: 18px 20px 16px;
+            border-right: 0;
+            border-bottom: 1px solid var(--line);
+            background: linear-gradient(180deg, #ffffff, #f8fafc);
+        }
+
+        .chart-eyebrow {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 900;
+            margin-bottom: 8px;
+        }
+
+        .chart-name {
+            font-size: 20px;
+            font-weight: 950;
+            line-height: 1.25;
+            margin-bottom: 0;
+        }
+
+        .chart-price {
+            color: var(--chart-tone);
+            font-family: "Bahnschrift", Consolas, monospace;
+            font-size: 34px;
+            font-weight: 900;
+            margin-bottom: 4px;
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .chart-change {
+            color: var(--chart-tone);
+            font-size: 13px;
+            font-weight: 900;
+            text-align: right;
+        }
+
+        .chart-meta {
+            grid-column: 1 / -1;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 14px;
+            margin-top: 8px;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        .chart-main {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .chart-toolbar {
+            min-height: 54px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 16px 10px;
+            border-bottom: 1px solid var(--line);
+            overflow: visible;
+        }
+
+        .switches {
+            display: flex;
+            align-items: flex-start;
+            align-content: flex-start;
+            flex-wrap: wrap;
+            gap: 8px;
+            min-width: 0;
+            width: 100%;
+            overflow: visible;
+            scrollbar-width: none;
+        }
+
+        .switches::-webkit-scrollbar {
+            display: none;
+        }
+
+        .seg {
+            flex: 0 1 auto;
+            max-width: 100%;
+            display: inline-flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 3px;
+            padding: 3px;
+            border: 1px solid var(--line);
+            border-radius: 11px;
+            background: var(--panel-soft);
+        }
+
+        .seg button {
+            height: 30px;
+            padding: 0 11px;
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 900;
+            cursor: pointer;
+            line-height: 1;
+            white-space: nowrap;
+        }
+
+        .seg button.active {
+            background: var(--panel);
+            color: var(--blue);
+            box-shadow: 0 6px 14px rgba(26, 38, 58, .10);
+        }
+
+        .close {
+            display: none;
+        }
+
+        .chart-area {
+            position: relative;
+            flex: 1;
+            min-height: 0;
+            padding: 16px 18px 18px;
+        }
+
+        .chart-area canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        .empty {
+            position: absolute;
+            inset: 0;
+            display: none;
+            place-items: center;
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 800;
+            background: var(--panel);
+        }
+
+        .empty.show {
+            display: grid;
+        }
+
+        @media (max-width: 980px) {
+            .shell {
+                width: min(100vw - 28px, 760px);
+                padding-bottom: 28px;
+            }
+
+            .topbar {
+                grid-template-columns: 1fr auto;
+                height: auto;
+                padding: 12px 0;
+            }
+
+            .tabs {
+                grid-column: 1 / -1;
+                justify-self: stretch;
+                flex-wrap: wrap;
+                overflow: visible;
+            }
+
+            .summary {
+                grid-template-columns: 1fr;
+            }
+
+            .cards {
+                grid-template-columns: 1fr;
+            }
+
+            .workspace {
+                grid-template-columns: 1fr;
+            }
+
+            .chart-shell {
+                position: relative;
+                top: auto;
+                height: 520px;
+                min-height: 520px;
+            }
+
+            .chart-panel {
+                grid-template-rows: auto minmax(0, 1fr);
+            }
+
+            .chart-side {
+                border-bottom: 1px solid var(--line);
+                padding: 16px 18px;
+            }
+
+            .chart-meta {
+                display: flex;
+            }
+
+            .chart-toolbar {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <header class="topbar">
+            <div class="brand">
+                <div class="brand-main">市场<span class="brand-mark">看板</span></div>
+                {% if brand_sub|default("") %}
+                <div class="brand-sub">{{ brand_sub }}</div>
+                {% endif %}
+            </div>
+
+            <nav class="tabs" id="filter">
+                <button class="tab active" data-filter="all">全部</button>
+                <button class="tab" data-filter="cn_broad">A股宽基</button>
+                <button class="tab" data-filter="cn_sector">A股行业</button>
+                <button class="tab" data-filter="dividend_low_vol">红利低波</button>
+                <button class="tab" data-filter="hk">港股</button>
+                <button class="tab" data-filter="us">美股</button>
+                <button class="tab" data-filter="commodity">商品</button>
+                <button class="tab" data-filter="bond">债券</button>
+                <button class="tab" data-filter="global">全球</button>
+                <button class="tab" data-filter="risk">风险</button>
+                <button class="tab" data-filter="crypto">加密</button>
+                <button class="tab" data-filter="fx">外汇</button>
+            </nav>
+
+            <div class="tools">
+                <div class="live"><span class="dot" id="live-dot"></span><span id="conn-txt">实时连接</span></div>
+                <button class="icon-btn lang-btn" id="language-toggle" title="Switch language">EN</button>
+                <button class="icon-btn" id="refresh" title="刷新">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M21 12a9 9 0 0 1-15.4 6.4M3 12A9 9 0 0 1 18.4 5.6"/>
+                        <path d="M21 4v6h-6M3 20v-6h6"/>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <section class="summary">
+            <div class="summary-card">
+                <div class="summary-k">今日视图</div>
+                <div class="summary-v">估值优先，行情次之</div>
+                <div class="summary-note">顶部保留筛选；说明区收成摘要，不再占用大面积。</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-k">曲线图</div>
+                <div class="summary-v">右侧完整显示</div>
+                <div class="summary-note">不再放底部浮层，避免被屏幕高度裁掉。</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-k">卡片密度</div>
+                <div class="summary-v" id="summary-count">加载中</div>
+                <div class="summary-note">更少装饰，更清楚的数字层级。</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-k">数据口径</div>
+                <div class="summary-v">卡片内展示</div>
+                <div class="summary-note">来源和更新频率仍保留在底部。</div>
+            </div>
+        </section>
+
+        <section class="workspace">
+            <main class="cards" id="cards">
+                <div class="summary-card">正在加载数据...</div>
+            </main>
+
+            <section class="chart-shell" id="chart-shell">
+                <div class="chart-panel">
+                    <aside class="chart-side" id="chart-side">
+                        <div>
+                            <div class="chart-eyebrow">趋势观察</div>
+                            <div class="chart-name" id="chart-name">请选择标的</div>
+                        </div>
+                        <div>
+                            <div class="chart-price" id="chart-price">--</div>
+                            <div class="chart-change" id="chart-change">--</div>
+                        </div>
+                        <div class="chart-meta">
+                            <div id="chart-source">来源 --</div>
+                            <div id="chart-time">时间 --</div>
+                            <div id="chart-quality">可信口径 --</div>
+                            <div id="chart-hint">右侧焦点图表固定可见，筛选后自动切换到当前分类。</div>
+                        </div>
+                    </aside>
+                    <div class="chart-main">
+                        <div class="chart-toolbar">
+                            <div class="switches">
+                                <div class="seg" id="series-tabs"></div>
+                                <div class="seg" id="period-tabs">
+                                    <button data-period="1mo">1月</button>
+                                    <button data-period="3mo" class="active">3月</button>
+                                    <button data-period="6mo">6月</button>
+                                    <button data-period="1y">1年</button>
+                                    <button data-period="10y">10年</button>
+                                    <button data-period="all">成立以来</button>
+                                </div>
+                            </div>
+                            <button class="close" id="close">×</button>
+                        </div>
+                        <div class="chart-area">
+                            <div class="empty" id="empty">暂无历史数据</div>
+                            <canvas id="chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </section>
+    </div>
+
+    <script>
+        let stocks = {};
+        let selected = null;
+        let filter = "all";
+        let period = "3mo";
+        let series = "price";
+        let chart = null;
+        const chartCache = new Map();
+        const socket = typeof io === "function" ? io() : null;
+        let socketConnected = Boolean(socket && socket.connected);
+        let lang = localStorage.getItem("dashboardLanguage") || "zh";
+        if (!["zh", "en"].includes(lang)) lang = "zh";
+
+        const i18n = {
+            zh: {
+                brandMarket: "市场",
+                brandBoard: "看板",
+                connected: "实时连接",
+                disconnected: "连接断开",
+                refresh: "刷新",
+                switchLanguage: "Switch to English",
+                filters: {
+                    all: "全部",
+                    cn: "A股",
+                    cn_broad: "A股宽基",
+                    cn_sector: "A股行业",
+                    dividend_low_vol: "红利低波",
+                    hk: "港股",
+                    us: "美股",
+                    commodity: "商品",
+                    bond: "债券",
+                    global: "全球",
+                    risk: "风险",
+                    crypto: "加密",
+                    fx: "外汇",
+                },
+                summary: [
+                    ["今日视图", "估值优先，行情次之", "顶部保留筛选；说明区收成摘要，不再占用大面积。"],
+                    ["曲线图", "右侧完整显示", "不再放底部浮层，避免被屏幕高度裁掉。"],
+                    ["卡片密度", "加载中", "更少装饰，更清楚的数字层级。"],
+                    ["数据口径", "卡片内展示", "来源和更新频率仍保留在底部。"],
+                ],
+                loading: "正在加载数据...",
+                chartEyebrow: "趋势观察",
+                pickSymbol: "请选择标的",
+                source: "来源",
+                time: "时点",
+                quality: "可信口径",
+                chartHint: "右侧焦点图表固定可见，筛选后自动切换到当前分类。",
+                dataSource: "数据源",
+                updates: { realtime: "实时", daily: "日更", delayed: "延迟" },
+                flags: {
+                    delayed: "延迟",
+                    non_official_source: "非官方源",
+                    stale_snapshot: "旧快照",
+                    stale_fallback: "旧备用数据",
+                    source_fallback: "备用源",
+                    simulated: "模拟数据",
+                },
+                stats: { high: "最高", low: "最低", prev: "昨收" },
+                series: { price: "指数", total_return: "全收益", dividend_return: "红利回报", dividend_yield: "官方股息率", both: "对比" },
+                periods: { "1mo": "1月", "3mo": "3月", "6mo": "6月", "1y": "1年", "3y": "3年", "5y": "5年", "10y": "10年", all: "成立以来" },
+                countSuffix: "个标的",
+                valuation: {
+                    yearsPercentile: "年分位",
+                    historicalPercentile: "历史分位",
+                    tenYearPE: "十年PE",
+                    pe: "年PE",
+                    percentile: "分位",
+                    source: "估值来源",
+                    until: "截至",
+                },
+                risk: {
+                    distance: "距10年高点",
+                    maxDrawdown: "最大回撤",
+                    title: "长期风险指标基于本地历史库计算，不触发额外远程请求。",
+                },
+                empty: {
+                    noHistory: "暂无历史数据",
+                    noCompare: "暂无指数收益和全收益历史数据。",
+                    noSeries: "暂无历史数据；当前免费/官方源未提供该标的的全收益曲线。",
+                    noDividendYield: "暂无历史数据；当前免费/官方源未返回该标的股息率曲线。",
+                    noPeriod: "暂无历史数据；当前数据源未提供这个周期。",
+                    failed: "历史数据加载失败",
+                    noComparable: "暂无可对比历史数据。",
+                    priceOnly: "仅有指数收益曲线可用，按首日=100展示。",
+                    totalOnly: "仅有第二条曲线可用，按首日=100展示。",
+                    noOverlap: "两条线没有共同日期，不能做收益对比。",
+                    commonRange: "共同区间",
+                    base100: "起，首个可用点=100",
+                },
+                chart: { close: "收盘价", yield: "收益率", dividendReturn: "红利回报", dividendYield: "官方股息率", raw: "原值", smoothed: "63日平滑", original: "原始每日值" },
+                signals: {
+                    "加倍定投": "加倍定投",
+                    "正常定投": "正常定投",
+                    "谨慎定投": "谨慎定投",
+                    "历史低位": "历史低位",
+                    "历史中位": "历史中位",
+                    "历史高位": "历史高位",
+                    "收益率高位": "收益率高位",
+                    "收益率中位": "收益率中位",
+                    "收益率低位": "收益率低位",
+                },
+            },
+            en: {
+                brandMarket: "Market",
+                brandBoard: "Board",
+                connected: "Live",
+                disconnected: "Disconnected",
+                refresh: "Refresh",
+                switchLanguage: "切换到中文",
+                filters: {
+                    all: "All",
+                    cn: "China A",
+                    cn_broad: "China Broad",
+                    cn_sector: "China Sectors",
+                    dividend_low_vol: "Dividend LV",
+                    hk: "Hong Kong",
+                    us: "U.S.",
+                    commodity: "Commodities",
+                    bond: "Bonds",
+                    global: "Global",
+                    risk: "Risk",
+                    crypto: "Crypto",
+                    fx: "FX",
+                },
+                summary: [
+                    ["Today", "Valuation first, prices second", "Filters stay on top; source notes are compressed into cards."],
+                    ["Chart", "Full right-side view", "No bottom overlay, so the chart is not clipped by screen height."],
+                    ["Density", "Loading", "Cleaner cards with clearer numeric hierarchy."],
+                    ["Data Policy", "Shown in cards", "Source and update cadence remain visible at the bottom."],
+                ],
+                loading: "Loading data...",
+                chartEyebrow: "Trend Watch",
+                pickSymbol: "Select an asset",
+                source: "Source",
+                time: "As of",
+                quality: "Quality",
+                chartHint: "The focus chart stays visible; filters switch the list automatically.",
+                dataSource: "Source",
+                updates: { realtime: "Live", daily: "Daily", delayed: "Delayed" },
+                flags: {
+                    delayed: "delayed",
+                    non_official_source: "non-official source",
+                    stale_snapshot: "stale snapshot",
+                    stale_fallback: "stale fallback data",
+                    source_fallback: "fallback source",
+                    simulated: "simulated",
+                },
+                stats: { high: "High", low: "Low", prev: "Prev" },
+                series: { price: "Index", total_return: "Total Return", dividend_return: "Dividend Return", dividend_yield: "Official D/P", both: "Compare" },
+                periods: { "1mo": "1M", "3mo": "3M", "6mo": "6M", "1y": "1Y", "3y": "3Y", "5y": "5Y", "10y": "10Y", all: "Since Inception" },
+                countSuffix: "assets",
+                valuation: {
+                    yearsPercentile: "yr pct.",
+                    historicalPercentile: "Historical pct.",
+                    tenYearPE: "10Y PE",
+                    pe: "Y PE",
+                    percentile: "pct.",
+                    source: "Valuation source",
+                    until: "Through",
+                },
+                risk: {
+                    distance: "Below 10Y high",
+                    maxDrawdown: "Max drawdown",
+                    title: "Long-term risk metrics are calculated from the local history database without extra remote requests.",
+                },
+                empty: {
+                    noHistory: "No history data",
+                    noCompare: "No price-return or total-return history is available.",
+                    noSeries: "No history data; the current free/official source does not provide a total-return curve for this asset.",
+                    noDividendYield: "No history data; the current free/official source did not return a dividend-yield curve for this asset.",
+                    noPeriod: "No history data for this period from the current source.",
+                    failed: "Failed to load history data",
+                    noComparable: "No comparable history data.",
+                    priceOnly: "Only price-return history is available, rebased to first day = 100.",
+                    totalOnly: "Only the second curve is available, rebased to first day = 100.",
+                    noOverlap: "The two curves have no overlapping date range.",
+                    commonRange: "Common range",
+                    base100: "start, first available point = 100",
+                },
+                chart: { close: "Close", yield: "Yield", dividendReturn: "Dividend Return", dividendYield: "Official D/P", raw: "raw", smoothed: "63D smoothed", original: "raw daily" },
+                signals: {
+                    "加倍定投": "Double DCA",
+                    "正常定投": "Normal DCA",
+                    "谨慎定投": "Cautious DCA",
+                    "历史低位": "Historical Low",
+                    "历史中位": "Historical Mid",
+                    "历史高位": "Historical High",
+                    "收益率高位": "High Yield",
+                    "收益率中位": "Mid Yield",
+                    "收益率低位": "Low Yield",
+                },
+            },
+        };
+
+        const nameI18n = {
+            CSI300: { zh: "沪深300", en: "CSI 300" },
+            HSTECH: { zh: "恒生科技指数", en: "Hang Seng TECH" },
+            HSI: { zh: "恒生指数", en: "Hang Seng Index" },
+            OIL_WTI: { zh: "WTI原油", en: "WTI Crude Oil" },
+            GOLD: { zh: "黄金", en: "Gold" },
+            CSI500: { zh: "中证A500", en: "CSI A500" },
+            CSI500_INDEX: { zh: "中证500", en: "CSI 500" },
+            CSI_ALL_SHARE: { zh: "中证全指", en: "CSI All Share" },
+            CSI1000: { zh: "中证1000", en: "CSI 1000" },
+            CSI2000: { zh: "中证2000", en: "CSI 2000" },
+            CSI_DIVIDEND: { zh: "中证红利低波动", en: "CSI Dividend Low Volatility" },
+            CSI_DIVIDEND_100: { zh: "中证红利低波100", en: "CSI Dividend Low Vol 100" },
+            CSI300_DIVIDEND_LOW_VOL: { zh: "沪深300红利低波", en: "CSI 300 Dividend Low Vol" },
+            CSI_DIVIDEND_QUALITY: { zh: "红利质量", en: "Dividend Quality" },
+            CSI_ALL_DIVIDEND_QUALITY: { zh: "中证红利质量", en: "CSI Dividend Quality" },
+            CSI_CASH_FLOW: { zh: "中证现金流", en: "CSI Free Cash Flow" },
+            CNI_FREE_CASH_FLOW: { zh: "国证自由现金流", en: "CNI Free Cash Flow" },
+            CSI_BAIJIU: { zh: "中证白酒指数", en: "CSI Baijiu" },
+            CHINEXT: { zh: "创业板指", en: "ChiNext Index" },
+            STAR50: { zh: "科创50", en: "STAR 50" },
+            STAR100: { zh: "科创100", en: "STAR 100" },
+            CN10Y: { zh: "中国国债十年收益率", en: "China 10Y Gov Bond Yield" },
+            US10Y: { zh: "美国国债十年收益率", en: "U.S. 10Y Treasury Yield" },
+            EU10Y: { zh: "欧元区10年AAA收益率", en: "Euro Area 10Y AAA Yield" },
+            VIX: { zh: "VIX恐慌指数", en: "VIX Volatility Index" },
+            USDCNY: { zh: "美元兑人民币", en: "USD/CNY" },
+            BTCUSD: { zh: "比特币", en: "Bitcoin" },
+            ETHUSD: { zh: "以太币", en: "Ethereum" },
+            CAC40: { zh: "法国CAC40", en: "France CAC 40" },
+            FTSE100: { zh: "英国富时100", en: "UK FTSE 100" },
+            DAX: { zh: "德国DAX指数", en: "Germany DAX" },
+            NDX: { zh: "纳斯达克100", en: "Nasdaq 100" },
+            SPX: { zh: "标普500", en: "S&P 500" },
+            XOP: { zh: "标普油气ETF", en: "S&P Oil & Gas ETF" },
+            WANJIA_GOLD: { zh: "万家周期视野C", en: "Wanjia Cyclical Vision C" },
+        };
+
+        const sourceI18n = {
+            "csindex_perf": "CSI Index",
+            "csindex_indicator": "CSI Index Valuation Indicator",
+            "cni_official": "CNI Index",
+            "中证指数官网": "CSI Index",
+            "中证指数官网估值指标文件": "CSI Index Valuation Indicator",
+            "新浪财经": "Sina Finance",
+            "新浪财经备用源": "Sina Finance Fallback",
+            "新浪财经港股指数快照": "Sina HK Index Snapshot",
+            "恒生指数公司公开日更报表": "Hang Seng Indexes Daily Bulletin",
+            "新浪财经外盘期货快照": "Sina Global Futures Snapshot",
+            "中国债券信息网": "ChinaBond",
+            "U.S. Treasury": "U.S. Treasury",
+            "European Central Bank": "European Central Bank",
+            "Cboe": "Cboe",
+            "新浪财经外汇快照": "Sina FX Snapshot",
+            "Coinbase Exchange": "Coinbase Exchange",
+            "Binance 公共数据备用源": "Binance Public Data Fallback",
+            "binance_public": "Binance Public Market Data",
+            "Yahoo Finance Chart": "Yahoo Finance Chart",
+            "Deutsche Börse": "Deutsche Börse",
+            "Nasdaq Global Indexes": "Nasdaq Global Indexes",
+            "新浪财经美股指数快照": "Sina U.S. Index Snapshot",
+            "新浪财经美股快照": "Sina U.S. Snapshot",
+            "东方财富基金净值": "Eastmoney Fund NAV",
+            "东方财富备用源": "Eastmoney Fallback",
+            "国证指数网": "CNI Index",
+            "本地计算": "Local Calculation",
+        };
+
+        const trustI18n = {
+            "官方": "Official",
+            "官方延迟": "Official delayed",
+            "第三方": "Third-party",
+            "备用源": "Fallback",
+            "代理": "Proxy",
+            "同源": "Same source",
+            "复权": "Adjusted",
+            "待核验": "Unverified",
+        };
+
+        const sourceCodeI18n = {
+            csindex_perf: { zh: "中证指数官网", en: "CSI Index" },
+            csindex_indicator: { zh: "中证指数官网估值指标文件", en: "CSI Index Valuation Indicator" },
+            computed_dividend_yield: { zh: "官方价格/全收益指数反推", en: "Derived from official price/total-return indices" },
+            cni_official: { zh: "国证指数网", en: "CNI Index" },
+            tx: { zh: "腾讯/akshare免费日线", en: "Tencent/akshare free daily bars" },
+            hk_sina: { zh: "新浪财经港股历史", en: "Sina HK history" },
+            yahoo_chart: { zh: "Yahoo Finance Chart", en: "Yahoo Finance Chart" },
+            stoxx_dax: { zh: "STOXX/Deutsche Börse公开历史", en: "STOXX/Deutsche Börse public history" },
+            lse_dory: { zh: "London Stock Exchange / Refinitiv", en: "London Stock Exchange / Refinitiv" },
+        };
+
+        const noteI18n = {
+            "来自指数公司或交易所官方公开数据。": "From official public data released by the index company or exchange.",
+            "来自中证指数官网官方历史行情接口。": "From the CSI Index official history endpoint.",
+            "来自中证指数官网官方日线行情接口。": "From the CSI Index official daily performance endpoint.",
+            "来自中证指数官网官方估值指标文件。": "From the CSI Index official valuation indicator file.",
+            "由官方价格指数与官方全收益指数在本地滚动计算，原始序列可追溯；不是指数公司直接发布的D/P字段。": "Calculated locally from official price and total-return index histories; source series are auditable. This is not the index company's directly published D/P field.",
+            "由官方价格指数与官方全收益指数逐日计算分红贡献，再滚动252个交易日复利；不是指数公司直接发布的D/P字段。": "Calculated daily from official price and total-return indices, then compounded over a rolling 252 trading-day window. This is not the index company's directly published D/P field.",
+            "来自国证指数网官方公开数据。": "From the CNI Index official public data.",
+            "来自恒生指数公司公开日更报表。": "From the Hang Seng Indexes public daily bulletin.",
+            "来自中国债券信息网公开收益率曲线。": "From ChinaBond public yield curves.",
+            "来自 U.S. Treasury 官方日收益率曲线。": "From the U.S. Treasury official daily yield curve.",
+            "由本地缓存中的官方收益率曲线计算，原始序列仍可追溯。": "Calculated locally from cached official yield curves; the source series remain auditable.",
+            "来自 European Central Bank 官方收益率曲线数据。": "From the European Central Bank official yield curve data.",
+            "来自 Cboe 官方 VIX 历史数据。": "From Cboe official VIX historical data.",
+            "来自 Coinbase Exchange 公开行情接口。": "From the Coinbase Exchange public market data API.",
+            "来自 Binance 公共市场数据接口。": "From the Binance public market data API.",
+            "来自可复核的历史行情接口并按最新日线生成卡片。": "Generated from a verifiable history endpoint using the latest daily bar.",
+            "来自新浪财经免费外汇快照。": "From Sina Finance free FX snapshot.",
+            "来自 Deutsche Börse 官方页面快照。": "From a Deutsche Börse official page snapshot.",
+            "来自 STOXX/Deutsche Börse 公开DAX历史文件。": "From the public STOXX/Deutsche Börse DAX history file.",
+            "来自 Nasdaq Global Indexes 官方页面，按页面 DATA AS OF 展示。": "From the Nasdaq Global Indexes official page, shown by its DATA AS OF timestamp.",
+            "免费第三方行情转发源，需以页面时点为准。": "Free third-party market-data relay; use the returned timestamp.",
+            "免费第三方历史行情源，需以返回日期为准。": "Free third-party history source; use the returned date.",
+            "免费第三方港股指数历史源，需以返回日期为准。": "Free third-party Hong Kong index history source; use the returned date.",
+            "第三方历史行情接口，适合画图校验，不视为交易所官方接口。": "Third-party history endpoint for charting; not treated as an exchange-official source.",
+            "第三方基金净值披露源，需以基金公司公告为最终准绳。": "Third-party fund NAV source; fund company announcements remain authoritative.",
+            "第三方基金累计净值披露源，需以基金公司公告为最终准绳。": "Third-party accumulated fund NAV source; fund company announcements remain authoritative.",
+            "主源不可用时使用的备用行情源，需重点查看数据时点。": "Fallback market source used when the primary source is unavailable; check the timestamp carefully.",
+            "这不是官方全收益指数，只能作为可投资载体或近似收益对比。": "This is not an official total-return index; it is only a proxy investable vehicle for comparison.",
+            "第二条线与价格线同源，仅用于占位/对照，不代表全收益。": "The second line uses the same source as the price line and is only a placeholder/comparison, not total return.",
+            "ETF复权收益，不是指数公司官方全收益指数。": "ETF adjusted return, not an official total-return index from the index provider.",
+            "未知来源，需补充核验规则。": "Unknown source; validation rules need to be added.",
+        };
+
+        const seriesLabelI18n = {
+            "指数收益": "Price Return",
+            "价格收益": "Price Return",
+            "全收益": "Total Return",
+            "股息率": "Dividend Yield",
+            "官方股息率": "Official D/P",
+            "近一年股息率": "Trailing 1Y Dividend Yield",
+            "滚动一年分红贡献率": "Rolling 1Y Dividend Contribution",
+            "滚动一年红利回报率": "Rolling 1Y Dividend Return",
+            "收益指数": "Return Index",
+            "两条线": "Both",
+            "收益率": "Yield",
+            "价格": "Price",
+            "指数": "Index",
+            "利差": "Spread",
+            "单位净值": "NAV",
+            "累计净值": "Accumulated NAV",
+            "ETF代理收益": "ETF Proxy Return",
+            "DAX全收益口径": "DAX Total-Return Basis",
+        };
+
+        function tr(path) {
+            return path.split(".").reduce((acc, part) => acc && acc[part], i18n[lang]) ?? path;
+        }
+
+        function localizeMap(map, value, fallback = value) {
+            if (!value) return fallback;
+            return lang === "zh" ? (fallback || value) : (map[value] || fallback || value);
+        }
+
+        function localizedName(key, d) {
+            return nameI18n[key]?.[lang] || d.name || key;
+        }
+
+        function localizedSource(label) {
+            if (sourceCodeI18n[label]) return sourceCodeI18n[label][lang];
+            return localizeMap(sourceI18n, label, label || tr("dataSource"));
+        }
+
+        function localizedTrustLabel(label) {
+            return localizeMap(trustI18n, label, label || tr("quality"));
+        }
+
+        function localizedTrustNote(note) {
+            if (!note) return lang === "zh" ? "来源口径待核验" : "Source policy needs verification.";
+            return lang === "zh" ? note : (noteI18n[note] || note);
+        }
+
+        function localizedUpdate(d) {
+            const byLabel = { "实时": "realtime", "日更": "daily", "延迟": "delayed" };
+            const key = d.update_frequency || byLabel[d.update_label];
+            if (key && tr(`updates.${key}`) !== `updates.${key}`) return tr(`updates.${key}`);
+            return lang === "zh" ? (d.update_label || "实时") : (d.update_label || "Live");
+        }
+
+        function localizedSignal(label) {
+            return label ? (tr(`signals.${label}`) === `signals.${label}` ? label : tr(`signals.${label}`)) : "";
+        }
+
+        function localizedSeriesLabel(seriesKey, fallback) {
+            if (seriesKey === "both") return tr("series.both");
+            if (seriesKey === "dividend_return" || seriesKey === "dividend_yield") {
+                return tr(`series.${seriesKey}`);
+            }
+            const label = fallback || fixedSeriesOptions.find(item => item.key === seriesKey)?.label || seriesKey;
+            if (lang === "zh") return label;
+            return seriesLabelI18n[label] || tr(`series.${seriesKey}`) || label;
+        }
+
+        function localizedFlag(flag) {
+            return tr(`flags.${flag}`) === `flags.${flag}` ? flag : tr(`flags.${flag}`);
+        }
+
+        function localizedCompareNote(note) {
+            if (!note || lang === "zh") return note || "";
+            if (note === "两条线没有共同日期，不能做收益对比。") return tr("empty.noOverlap");
+            if (note === "仅有指数收益曲线可用，按首日=100展示。") return tr("empty.priceOnly");
+            if (note === "仅有第二条曲线可用，按首日=100展示。") return tr("empty.totalOnly");
+            const common = note.match(/^共同区间\s+(.+?)\s+起，首个可用点=100$/);
+            if (common) return `${tr("empty.commonRange")} ${common[1]} ${tr("empty.base100")}`;
+            return note;
+        }
+
+        function localizedFreeText(text) {
+            if (!text || lang === "zh") return text || "";
+            if (noteI18n[text]) return noteI18n[text];
+            const officialPe = text.match(/^官方日频PE，截至\s+(.+)$/);
+            if (officialPe) return `Official daily PE, through ${officialPe[1]}`;
+            return text;
+        }
+
+        function marketLabel(type) {
+            const label = tr(`filters.${type}`);
+            return label === `filters.${type}` ? market(type).label : label;
+        }
+
+        function applyLanguage() {
+            document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+            document.title = lang === "zh" ? "市场看板" : "Market Board";
+            document.querySelector(".brand-main").innerHTML = `${tr("brandMarket")}<span class="brand-mark">${tr("brandBoard")}</span>`;
+            document.getElementById("language-toggle").textContent = lang === "zh" ? "EN" : "中";
+            document.getElementById("language-toggle").title = tr("switchLanguage");
+            document.getElementById("refresh").title = tr("refresh");
+            document.getElementById("conn-txt").textContent = socketConnected ? tr("connected") : tr("disconnected");
+            document.querySelectorAll("#filter .tab").forEach(btn => {
+                btn.textContent = tr(`filters.${btn.dataset.filter}`);
+            });
+
+            const summaries = document.querySelectorAll(".summary .summary-card");
+            tr("summary").forEach((item, idx) => {
+                const card = summaries[idx];
+                if (!card) return;
+                card.querySelector(".summary-k").textContent = item[0];
+                if (idx !== 2 || !Object.keys(stocks).length) card.querySelector(".summary-v").textContent = item[1];
+                card.querySelector(".summary-note").textContent = item[2];
+            });
+
+            document.querySelector(".chart-eyebrow").textContent = tr("chartEyebrow");
+            if (!selected) {
+                document.getElementById("chart-name").textContent = tr("pickSymbol");
+                document.getElementById("chart-source").textContent = `${tr("source")} --`;
+                document.getElementById("chart-time").textContent = `${tr("time")} --`;
+                document.getElementById("chart-quality").textContent = `${tr("quality")} --`;
+                document.getElementById("cards").innerHTML = `<div class="summary-card">${tr("loading")}</div>`;
+            }
+            document.getElementById("chart-hint").textContent = tr("chartHint");
+            document.getElementById("empty").textContent = tr("empty.noHistory");
+        }
+
+        const dividendLowVolKeys = new Set([
+            "CSI_DIVIDEND",
+            "CSI_DIVIDEND_100",
+            "CSI300_DIVIDEND_LOW_VOL",
+            "CSI_DIVIDEND_QUALITY",
+            "CSI_ALL_DIVIDEND_QUALITY",
+            "CSI_CASH_FLOW",
+            "CNI_FREE_CASH_FLOW",
+        ]);
+        const cnBroadKeys = new Set([
+            "CSI300",
+            "CSI500",
+            "CSI500_INDEX",
+            "CSI_ALL_SHARE",
+            "CSI1000",
+            "CSI2000",
+            "CHINEXT",
+            "STAR50",
+            "STAR100",
+        ]);
+        const fixedSeriesOptions = [
+            { key: "price", label: "指数收益" },
+            { key: "total_return", label: "全收益" },
+            { key: "dividend_return", label: "红利回报" },
+            { key: "dividend_yield", label: "官方股息率" },
+            { key: "both", label: "两条线" },
+        ];
+        const fixedPeriodOptions = [
+            { key: "1mo", label: "1月" },
+            { key: "3mo", label: "3月" },
+            { key: "6mo", label: "6月" },
+            { key: "1y", label: "1年" },
+            { key: "3y", label: "3年" },
+            { key: "5y", label: "5年" },
+            { key: "10y", label: "10年" },
+            { key: "all", label: "成立以来" },
+        ];
+
+        const markets = {
+            cn: { label: "A股", color: "#e5484d", bg: "#fff0f0", fg: "#e5484d" },
+            hk: { label: "港股", color: "#d88718", bg: "#fff6e5", fg: "#b96a00" },
+            us: { label: "美股", color: "#2563eb", bg: "#eaf1ff", fg: "#2563eb" },
+            commodity: { label: "商品", color: "#8b5cf6", bg: "#f3edff", fg: "#7c3aed" },
+            bond: { label: "债券", color: "#0f9f9a", bg: "#e5fbf8", fg: "#0f766e" },
+            global: { label: "全球", color: "#16a34a", bg: "#eaf8ef", fg: "#16803a" },
+            risk: { label: "风险", color: "#f97316", bg: "#fff3e8", fg: "#c2410c" },
+            crypto: { label: "加密", color: "#0f172a", bg: "#eef2f7", fg: "#0f172a" },
+            fx: { label: "外汇", color: "#64748b", bg: "#f1f5f9", fg: "#475569" },
+        };
+
+        function market(type) {
+            return markets[type] || markets.global;
+        }
+
+        function fmt(value, currency) {
+            if (value == null || Number.isNaN(+value)) return "--";
+            if (currency === "%") return (+value).toFixed(2) + "%";
+            const digits = Math.abs(+value) < 10 ? 4 : 2;
+            return (+value).toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+        }
+
+        function tone(change) {
+            if (+change > 0) return { color: "var(--red)", soft: "#ffeded", arrow: "▲", sign: "+" };
+            if (+change < 0) return { color: "var(--green)", soft: "#e8f8f0", arrow: "▼", sign: "" };
+            return { color: "var(--muted)", soft: "#eef2f7", arrow: "—", sign: "" };
+        }
+
+        function signalClass(valuation) {
+            const t = valuation && valuation.signal_tone;
+            if (t === "danger") return "danger";
+            if (t === "warn") return "warn";
+            return "";
+        }
+
+        function trustClass(trust) {
+            const tone = trust && trust.tone;
+            if (tone === "official") return "official";
+            if (tone === "third") return "third";
+            if (tone === "warn") return "warn";
+            return "";
+        }
+
+        function trustBadge(d) {
+            const trust = d.source_trust || {};
+            const label = localizedTrustLabel(trust.label || "待核验");
+            const note = localizedTrustNote(trust.note || "来源口径待核验");
+            return `<div class="trust ${trustClass(trust)}" title="${note}">${label}</div>`;
+        }
+
+        function qualityText(d) {
+            const trust = d.source_trust || {};
+            const flags = d.data_quality_flags || [];
+            const flagText = flags.length
+                ? (lang === "zh" ? `；提示 ${flags.map(localizedFlag).join(", ")}` : `; flags: ${flags.map(localizedFlag).join(", ")}`)
+                : "";
+            return `${localizedTrustLabel(trust.label || "待核验")}: ${localizedTrustNote(trust.note || "来源口径待核验")}${flagText}`;
+        }
+
+        function valuationTitle(d) {
+            const v = d.valuation || {};
+            const parts = [];
+            if (v.source) parts.push(`${tr("valuation.source")}: ${localizedSource(v.source)}`);
+            if (v.data_end) parts.push(`${tr("valuation.until")}: ${v.data_end}`);
+            if (v.note) parts.push(localizedFreeText(v.note));
+            return parts.join(lang === "zh" ? "；" : "; ");
+        }
+
+        function valuationText(d) {
+            const v = d.valuation;
+            if (!v) return "";
+            if (v.is_price_percentile) {
+                const yrs = v.years_of_data || "";
+                const pct = v.price_percentile ?? "--";
+                const label = localizedSignal(v.signal_label || "历史分位");
+                const yearsText = lang === "zh" ? `${yrs}年分位` : `${yrs}${tr("valuation.yearsPercentile")}`;
+                return `<span>${yearsText} <strong>${pct}%</strong></span><span>${label}</span>`;
+            }
+            if (v.pe == null) return "";
+            const years = +v.years_of_data >= 9
+                ? tr("valuation.tenYearPE")
+                : (lang === "zh" ? `${v.years_of_data || ""}年PE` : `${v.years_of_data || ""}${tr("valuation.pe")}`);
+            return `<span>${years} <strong>${v.pe}</strong></span><span>${v.pe_percentile}%${tr("valuation.percentile")}</span>`;
+        }
+
+        function riskMetricsText(d) {
+            const r = d.risk_metrics;
+            if (!r) return "";
+            const distance = Number(r.distance_10y_high_pct);
+            const drawdown = Number(r.max_drawdown_pct);
+            if (!Number.isFinite(distance) || !Number.isFinite(drawdown)) return "";
+            return `<span>${tr("risk.distance")} <strong>${distance.toFixed(2)}%</strong></span><span>${tr("risk.maxDrawdown")} ${drawdown.toFixed(2)}%</span>`;
+        }
+
+        function seriesOptions(d) {
+            const configured = d && d.history_series ? d.history_series : {};
+            return fixedSeriesOptions.filter(item => {
+                if (item.key === "total_return" || item.key === "both") {
+                    return Boolean(configured.total_return);
+                }
+                if (item.key === "dividend_return" || item.key === "dividend_yield") {
+                    const dividendSeries = configured[item.key];
+                    return Boolean(dividendSeries && dividendSeries.has_data);
+                }
+                return true;
+            }).map(item => {
+                const cfg = configured[item.key] || {};
+                const rawLabel = cfg.label || item.label;
+                return {
+                    ...item,
+                    rawLabel,
+                    label: localizedSeriesLabel(item.key, rawLabel),
+                    trust: cfg.trust || null,
+                    source: cfg.source || "",
+                    symbol: cfg.symbol || "",
+                };
+            });
+        }
+
+        function cardHtml(key, d) {
+            const m = market(d.type);
+            const direction = tone(d.change);
+            const vhtml = valuationText(d);
+            const riskHtml = riskMetricsText(d);
+            const update = localizedUpdate(d);
+            const signal = d.valuation && d.valuation.signal_label
+                ? `<div class="signal ${signalClass(d.valuation)}">${localizedSignal(d.valuation.signal_label)}</div>`
+                : "";
+            const vtitle = valuationTitle(d);
+            return `
+                <article class="card ${selected === key ? "active" : ""}" data-key="${key}" data-market="${d.type}" style="--market:${m.color};--tone:${direction.color};--tone-soft:${direction.soft};--badge-bg:${m.bg};--badge-fg:${m.fg}">
+                    <div class="card-head">
+                        <div>
+                            <div class="name">${localizedName(key, d)}</div>
+                            <div class="symbol">${d.symbol}</div>
+                        </div>
+                        <div class="badges">
+                            <div class="badge">${marketLabel(d.type)}</div>
+                            ${trustBadge(d)}
+                            ${signal}
+                        </div>
+                    </div>
+                    <div class="price">${fmt(d.price, d.currency)}</div>
+                    <div class="change">${direction.arrow} ${direction.sign}${(+d.change_pct || 0).toFixed(2)}%</div>
+                    <div class="stats">
+                        <div class="stat"><div class="stat-k">${tr("stats.high")}</div><div class="stat-v">${fmt(d.high, "")}</div></div>
+                        <div class="stat"><div class="stat-k">${tr("stats.low")}</div><div class="stat-v">${fmt(d.low, "")}</div></div>
+                        <div class="stat"><div class="stat-k">${tr("stats.prev")}</div><div class="stat-v">${fmt(d.prev_close, "")}</div></div>
+                    </div>
+                    ${vhtml ? `<div class="valuation" title="${vtitle}">${vhtml}</div>` : ""}
+                    ${riskHtml ? `<div class="valuation" title="${tr("risk.title")}">${riskHtml}</div>` : ""}
+                    <div class="source"><span>${localizedSource(d.actual_source_label || d.source_label || tr("dataSource"))}</span><span class="cadence">${update}</span></div>
+                </article>
+            `;
+        }
+
+        function visibleEntries() {
+            return Object.entries(stocks).filter(([key, d]) => {
+                if (filter === "all") return true;
+                if (filter === "dividend_low_vol") return dividendLowVolKeys.has(key);
+                if (filter === "cn_broad") return cnBroadKeys.has(key);
+                if (filter === "cn_sector") {
+                    return d.type === "cn" && !cnBroadKeys.has(key) && !dividendLowVolKeys.has(key);
+                }
+                return d.type === filter;
+            });
+        }
+
+        function render() {
+            const entries = visibleEntries();
+            document.querySelector(".workspace").classList.toggle("sparse", entries.length > 0 && entries.length <= 3);
+            document.getElementById("cards").innerHTML = entries.map(([key, d]) => cardHtml(key, d)).join("");
+            document.getElementById("summary-count").textContent = `${entries.length} ${tr("countSuffix")}`;
+            document.querySelectorAll(".card").forEach(card => {
+                card.addEventListener("click", () => pick(card.dataset.key));
+            });
+        }
+
+        function setFilter(next) {
+            filter = next;
+            document.querySelectorAll("#filter .tab").forEach(btn => btn.classList.toggle("active", btn.dataset.filter === filter));
+            const entries = visibleEntries();
+            if (entries.length && !entries.some(([key]) => key === selected)) {
+                pick(entries[0][0]);
+                return;
+            }
+            render();
+        }
+
+        function updateSeriesTabs(d) {
+            const tabs = document.getElementById("series-tabs");
+            const opts = seriesOptions(d);
+            if (!opts.some(item => item.key === series)) series = "price";
+            tabs.style.display = "inline-flex";
+            tabs.innerHTML = opts.map(item => {
+                const title = item.trust && item.trust.note ? localizedTrustNote(item.trust.note) : item.label;
+                return `<button data-series="${item.key}" class="${item.key === series ? "active" : ""}" title="${title}">${item.label}</button>`;
+            }).join("");
+        }
+
+        function updatePeriodTabs(d) {
+            const tabs = document.getElementById("period-tabs");
+            const activeSeries = seriesOptions(d).find(item => item.key === series);
+            const seriesConfig = activeSeries && d.history_series ? d.history_series[activeSeries.key] : null;
+            const allowed = seriesConfig && seriesConfig.allowed_periods && seriesConfig.allowed_periods.length
+                ? seriesConfig.allowed_periods
+                : (d.allowed_periods && d.allowed_periods.length ? d.allowed_periods : fixedPeriodOptions.map(item => item.key));
+            if (!allowed.includes(period)) {
+                period = allowed.includes("3mo") ? "3mo" : allowed[allowed.length - 1];
+            }
+            tabs.innerHTML = fixedPeriodOptions
+                .filter(item => allowed.includes(item.key))
+                .map(item => `<button data-period="${item.key}" class="${item.key === period ? "active" : ""}">${tr(`periods.${item.key}`)}</button>`)
+                .join("");
+        }
+
+        function updateChartSide(key) {
+            const d = stocks[key];
+            const direction = tone(d.change);
+            const activeSeries = seriesOptions(d).find(item => item.key === series);
+            const seriesSource = activeSeries && activeSeries.source ? activeSeries.source : "";
+            const sourceText = localizedSource(d.actual_source_label || d.source_label || "--");
+            const seriesSourceText = seriesSource && series !== "price"
+                ? `${sourceText} · ${activeSeries.label}: ${localizedSource(seriesSource)}`
+                : sourceText;
+            document.getElementById("chart-shell").style.setProperty("--chart-tone", direction.color);
+            document.getElementById("chart-name").textContent = `${localizedName(key, d)} · ${d.symbol}`;
+            document.getElementById("chart-price").textContent = fmt(d.price, d.currency);
+            document.getElementById("chart-change").textContent = `${direction.arrow} ${direction.sign}${(+d.change_pct || 0).toFixed(2)}% (${direction.sign}${fmt(d.change, "")})`;
+            document.getElementById("chart-source").textContent = `${tr("source")} ${seriesSourceText}`;
+            document.getElementById("chart-time").textContent = `${tr("time")} ${d.data_as_of || "--"}`;
+            document.getElementById("chart-quality").textContent = `${tr("quality")} ${qualityText(d)}`;
+        }
+
+        async function pick(key) {
+            if (selected !== key) series = "price";
+            selected = key;
+            render();
+            updateSeriesTabs(stocks[key]);
+            updatePeriodTabs(stocks[key]);
+            updateChartSide(key);
+            document.getElementById("chart-shell").classList.add("open");
+            await loadChart();
+        }
+
+        async function loadChart() {
+            if (!selected) return;
+            const empty = document.getElementById("empty");
+            empty.classList.remove("show");
+            empty.textContent = tr("empty.noHistory");
+            try {
+                if (series === "both") {
+                    const payload = await fetchCompareRows(selected, period);
+                    if ((!payload.price || !payload.price.length) && (!payload.total || !payload.total.length)) {
+                        if (chart) chart.destroy();
+                        chart = null;
+                        empty.textContent = localizedCompareNote(payload.note) || tr("empty.noCompare");
+                        empty.classList.add("show");
+                        return;
+                    }
+                    drawCompareChart(payload, stocks[selected]);
+                    return;
+                }
+
+                const rows = await fetchHistoryRows(selected, period, series);
+                if (!rows || !rows.length) {
+                    if (chart) chart.destroy();
+                    chart = null;
+                    const label = seriesOptions(stocks[selected]).find(item => item.key === series)?.label || "该口径";
+                    empty.textContent = series === "total_return"
+                        ? (lang === "zh" ? `暂无${label}历史数据；当前免费/官方源未提供该标的全收益曲线。` : tr("empty.noSeries"))
+                        : (series === "dividend_return" || series === "dividend_yield")
+                            ? (lang === "zh" ? `暂无${label}历史数据；当前免费/官方源未返回该标的曲线。` : tr("empty.noDividendYield"))
+                            : (lang === "zh" ? `暂无${periodLabel(period)}历史数据；当前数据源未提供这个周期。` : tr("empty.noPeriod"));
+                    empty.classList.add("show");
+                    return;
+                }
+                drawChart(rows, stocks[selected], series);
+            } catch {
+                if (chart) chart.destroy();
+                chart = null;
+                empty.textContent = tr("empty.failed");
+                empty.classList.add("show");
+            }
+        }
+
+        function periodLabel(value) {
+            const label = tr(`periods.${value}`);
+            return label === `periods.${value}` ? value : label;
+        }
+
+        async function fetchHistoryRows(key, nextPeriod, nextSeries) {
+            const cacheKey = `${key}|${nextPeriod}|${nextSeries}`;
+            if (chartCache.has(cacheKey)) return chartCache.get(cacheKey);
+            const params = new URLSearchParams({
+                period: nextPeriod,
+                series: nextSeries,
+                max_points: nextPeriod === "all" ? "1100" : "900",
+            });
+            const res = await fetch(`/api/history/${key}?${params.toString()}`);
+            const rows = await res.json();
+            chartCache.set(cacheKey, rows || []);
+            return rows || [];
+        }
+
+        async function fetchCompareRows(key, nextPeriod) {
+            const cacheKey = `${key}|${nextPeriod}|compare`;
+            if (chartCache.has(cacheKey)) return chartCache.get(cacheKey);
+            const params = new URLSearchParams({
+                period: nextPeriod,
+                max_points: nextPeriod === "all" ? "1100" : "900",
+            });
+            const res = await fetch(`/api/history-compare/${key}?${params.toString()}`);
+            const payload = await res.json();
+            const safePayload = payload || { price: [], total: [], note: "" };
+            chartCache.set(cacheKey, safePayload);
+            return safePayload;
+        }
+
+        function isPercentChartSeries(info, seriesKey) {
+            return seriesKey === "dividend_return" || seriesKey === "dividend_yield" || info.currency === "%";
+        }
+
+        function movingAverage(values, windowSize = 63) {
+            const result = [];
+            let sum = 0;
+            let count = 0;
+            const queue = [];
+            values.forEach(value => {
+                const numeric = Number(value);
+                if (Number.isFinite(numeric)) {
+                    queue.push(numeric);
+                    sum += numeric;
+                    count += 1;
+                } else {
+                    queue.push(null);
+                }
+                if (queue.length > windowSize) {
+                    const removed = queue.shift();
+                    if (Number.isFinite(removed)) {
+                        sum -= removed;
+                        count -= 1;
+                    }
+                }
+                result.push(count ? sum / count : null);
+            });
+            return result;
+        }
+
+        function percentSeriesLabel(seriesKey) {
+            if (seriesKey === "dividend_return") return tr("chart.dividendReturn");
+            if (seriesKey === "dividend_yield") return tr("chart.dividendYield");
+            return tr("chart.yield");
+        }
+
+        function drawChart(rows, info, seriesKey = "price") {
+            const ctx = document.getElementById("chart").getContext("2d");
+            const prices = rows.map(row => row.close);
+            const labels = rows.map(row => row.date);
+            const isUp = prices[prices.length - 1] >= prices[0];
+            const color = isUp ? "#e5484d" : "#1aa66a";
+            const percentSeries = isPercentChartSeries(info, seriesKey);
+            const datasets = seriesKey === "dividend_return"
+                ? [
+                    {
+                        label: tr("chart.original"),
+                        data: prices,
+                        borderColor: "rgba(229,72,77,.28)",
+                        backgroundColor: "transparent",
+                        borderWidth: 1,
+                        fill: false,
+                        tension: .12,
+                        pointRadius: 0,
+                        pointHoverRadius: 3,
+                    },
+                    {
+                        label: tr("chart.smoothed"),
+                        data: movingAverage(prices, 63),
+                        borderColor: "#e5484d",
+                        backgroundColor: "rgba(229,72,77,.10)",
+                        borderWidth: 2.2,
+                        fill: true,
+                        tension: .32,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                    },
+                ]
+                : [{
+                    label: percentSeries ? percentSeriesLabel(seriesKey) : tr("chart.close"),
+                    data: prices,
+                    borderColor: color,
+                    backgroundColor: color + "12",
+                    borderWidth: 1.8,
+                    fill: true,
+                    tension: .28,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                }];
+            if (chart) chart.destroy();
+            chart = new Chart(ctx, {
+                type: "line",
+                data: {
+                    labels,
+                    datasets,
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { intersect: false, mode: "index" },
+                    plugins: {
+                        legend: { display: seriesKey === "dividend_return", labels: { color: "#516178", boxWidth: 10, usePointStyle: true } },
+                        tooltip: {
+                            backgroundColor: "rgba(23,32,51,.94)",
+                            titleColor: "#fff",
+                            bodyColor: "#fff",
+                            padding: 10,
+                            callbacks: {
+                                label: item => `${item.dataset.label || (percentSeries ? percentSeriesLabel(seriesKey) : tr("chart.close"))}: ${(+item.parsed.y).toFixed(2)}${percentSeries ? "%" : ""}`,
+                            },
+                        },
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: "rgba(105,119,141,.13)" },
+                            ticks: { color: "#7b8798", maxTicksLimit: 7, font: { size: 11 } },
+                        },
+                        y: {
+                            position: "right",
+                            grid: { color: "rgba(105,119,141,.13)" },
+                            ticks: { color: "#7b8798", font: { size: 11 }, callback: value => `${(+value).toFixed(2)}${percentSeries ? "%" : ""}` },
+                        },
+                    },
+                },
+            });
+        }
+
+        function formatRawValue(value) {
+            if (value == null || Number.isNaN(+value)) return "--";
+            const num = Number(value);
+            return num.toLocaleString("en-US", {
+                minimumFractionDigits: Math.abs(num) < 10 ? 4 : 2,
+                maximumFractionDigits: Math.abs(num) < 10 ? 4 : 2,
+            });
+        }
+
+        function labelForSeries(info, key, fallback) {
+            return seriesOptions(info).find(item => item.key === key)?.label || fallback;
+        }
+
+        function compareDataset(label, rows, labels, color, fillColor) {
+            const byDate = new Map(rows.map(row => [row.date, row]));
+            const rawValues = labels.map(date => byDate.get(date)?.raw ?? null);
+            return {
+                label,
+                data: labels.map(date => {
+                    const row = byDate.get(date);
+                    return row ? (row.value ?? row.close) : null;
+                }),
+                rawValues,
+                borderColor: color,
+                backgroundColor: fillColor,
+                borderWidth: 1.8,
+                fill: false,
+                tension: .28,
+                pointRadius: 0,
+                pointHoverRadius: 4,
+                spanGaps: true,
+            };
+        }
+
+        function drawCompareChart(payload, info) {
+            const empty = document.getElementById("empty");
+            const priceRows = payload.price || [];
+            const totalRows = payload.total || [];
+            const labels = [...new Set([...priceRows.map(row => row.date), ...totalRows.map(row => row.date)])].sort();
+            if (!labels.length) {
+                if (chart) chart.destroy();
+                chart = null;
+                empty.textContent = localizedCompareNote(payload.note) || tr("empty.noComparable");
+                empty.classList.add("show");
+                return;
+            }
+
+            empty.classList.remove("show");
+            const ctx = document.getElementById("chart").getContext("2d");
+            const datasets = [];
+            if (priceRows.length) {
+                datasets.push(compareDataset(
+                    labelForSeries(info, "price", tr("series.price")),
+                    priceRows,
+                    labels,
+                    "#2563eb",
+                    "rgba(37,99,235,.08)"
+                ));
+            }
+            if (totalRows.length) {
+                datasets.push(compareDataset(
+                    labelForSeries(info, "total_return", tr("series.total_return")),
+                    totalRows,
+                    labels,
+                    "#e5484d",
+                    "rgba(229,72,77,.08)"
+                ));
+            }
+
+            if (chart) chart.destroy();
+            chart = new Chart(ctx, {
+                type: "line",
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { intersect: false, mode: "index" },
+                    plugins: {
+                        legend: { display: true, labels: { color: "#516178", boxWidth: 10, usePointStyle: true } },
+                        tooltip: {
+                            backgroundColor: "rgba(23,32,51,.94)",
+                            titleColor: "#fff",
+                            bodyColor: "#fff",
+                            padding: 10,
+                            callbacks: {
+                                label: item => {
+                                    const raw = item.dataset.rawValues?.[item.dataIndex];
+                                    const rawText = raw == null ? "" : (lang === "zh" ? `，原值 ${formatRawValue(raw)}` : `, ${tr("chart.raw")} ${formatRawValue(raw)}`);
+                                    const note = localizedCompareNote(payload.note);
+                                    return `${item.dataset.label}: ${(+item.parsed.y).toFixed(2)} (${note}${rawText})`;
+                                },
+                            },
+                        },
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: "rgba(105,119,141,.13)" },
+                            ticks: { color: "#7b8798", maxTicksLimit: 7, font: { size: 11 } },
+                        },
+                        y: {
+                            position: "right",
+                            grid: { color: "rgba(105,119,141,.13)" },
+                            ticks: { color: "#7b8798", font: { size: 11 }, callback: value => (+value).toFixed(1) },
+                        },
+                    },
+                },
+            });
+        }
+
+        async function loadStocks(force = false) {
+            if (force) chartCache.clear();
+            const res = await fetch(`/api/stocks${force ? "?refresh=1" : ""}`);
+            stocks = await res.json();
+            render();
+            if (!selected) {
+                const preferred = stocks.CSI300_DIVIDEND_LOW_VOL ? "CSI300_DIVIDEND_LOW_VOL" : Object.keys(stocks)[0];
+                await pick(preferred);
+            }
+        }
+
+        document.getElementById("filter").addEventListener("click", event => {
+            const btn = event.target.closest("[data-filter]");
+            if (btn) setFilter(btn.dataset.filter);
+        });
+
+        document.getElementById("period-tabs").addEventListener("click", event => {
+            const btn = event.target.closest("[data-period]");
+            if (!btn) return;
+            period = btn.dataset.period;
+            document.querySelectorAll("[data-period]").forEach(item => item.classList.toggle("active", item === btn));
+            loadChart();
+        });
+
+        document.getElementById("series-tabs").addEventListener("click", event => {
+            const btn = event.target.closest("[data-series]");
+            if (!btn) return;
+            series = btn.dataset.series;
+            updateSeriesTabs(stocks[selected]);
+            updatePeriodTabs(stocks[selected]);
+            updateChartSide(selected);
+            loadChart();
+        });
+
+        document.getElementById("close").addEventListener("click", () => {
+            document.getElementById("chart-shell").classList.remove("open");
+        });
+
+        document.getElementById("refresh").addEventListener("click", () => loadStocks(true));
+
+        document.getElementById("language-toggle").addEventListener("click", async () => {
+            lang = lang === "zh" ? "en" : "zh";
+            localStorage.setItem("dashboardLanguage", lang);
+            applyLanguage();
+            render();
+            if (selected && stocks[selected]) {
+                updateSeriesTabs(stocks[selected]);
+                updatePeriodTabs(stocks[selected]);
+                updateChartSide(selected);
+                await loadChart();
+            }
+        });
+
+        if (socket) {
+            socket.on("connect", () => {
+                socketConnected = true;
+                document.getElementById("conn-txt").textContent = tr("connected");
+                document.getElementById("live-dot").style.background = "var(--green)";
+            });
+
+            socket.on("disconnect", () => {
+                socketConnected = false;
+                document.getElementById("conn-txt").textContent = tr("disconnected");
+                document.getElementById("live-dot").style.background = "var(--red)";
+            });
+
+            socket.on("stock_update", data => {
+                stocks = data;
+                render();
+                const entries = visibleEntries();
+                if (selected && stocks[selected]) {
+                    updateSeriesTabs(stocks[selected]);
+                    updatePeriodTabs(stocks[selected]);
+                    updateChartSide(selected);
+                } else if (entries.length) {
+                    pick(entries[0][0]);
+                }
+            });
+        }
+
+        applyLanguage();
+        loadStocks();
+    </script>
+</body>
+</html>

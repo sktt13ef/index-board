@@ -8,6 +8,8 @@ __pycache__/
 venv/
 .runtime/
 data/history/*.csv
+data/*.sqlite3-wal
+data/*.sqlite3-shm
 valuation_data/
 run_dev.py
 *.vbs

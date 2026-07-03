@@ -6,10 +6,14 @@ from io import BytesIO
 from datetime import datetime, timedelta
 from threading import Thread
 
-import akshare as ak
 import pandas as pd
 import requests
 from flask_socketio import SocketIO
+
+try:
+    import akshare as ak
+except Exception:  # keep the dashboard importable when optional akshare is absent
+    ak = None
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -24,6 +28,8 @@ from local_valuation_calculator import get_calculator
 
 # 导入历史数据管理器
 from history_data_manager import get_history_manager
+from market_cache import get_market_cache
+from market_sources import get_source_entry
 
 
 class StockDataProvider:
@@ -32,31 +38,69 @@ class StockDataProvider:
     DAILY_SOURCE_TTL_SECONDS = 3600
     VALUATION_REFRESH_SECONDS = 3600
     REALTIME_VALUATION_KEYS = {"CSI300", "CSI500"}
-    DAILY_VALUATION_KEYS = {"CSI_DIVIDEND", "STAR50", "STAR100", "CSI_BAIJIU"}
+    DAILY_VALUATION_KEYS = {
+        "CSI500_INDEX",
+        "CSI_DIVIDEND",
+        "CSI_DIVIDEND_100",
+        "CSI300_DIVIDEND_LOW_VOL",
+        "CSI_DIVIDEND_QUALITY",
+        "CSI_ALL_DIVIDEND_QUALITY",
+        "CSI_CASH_FLOW",
+        "STAR50",
+        "STAR100",
+        "CSI_BAIJIU",
+        "CSI_ALL_SHARE",
+        "CSI1000",
+        "CSI2000",
+    }
     # 用10年价格/收益率分位（无官方PE的指数）
     PRICE_PERCENTILE_KEYS = {
-        "CHINEXT", "HSTECH", "HSI", "NDX", "DAX",
-        "GOLD", "OIL_WTI", "XOP",
-        "CN10Y", "US10Y", "WANJIA_GOLD",
+        "CHINEXT", "HSTECH", "HSI", "NDX", "DAX", "CAC40", "FTSE100",
+        "GOLD", "OIL_WTI",
+        "CN10Y", "US10Y", "EU10Y",
+        "VIX",
     }
     # 用月频 PE-TTM 历史计算近10年滚动市盈率分位（multpl.com 推导，基于标普官方EPS）
     MULTPL_PE_KEYS = {"SPX"}
     MULTPL_PE_CACHE_TTL_HOURS = 12
-    SOURCE_TYPE_BY_SOURCE = {
-        "csindex_official": "官方",
-        "csindex": "官方",
-        "hsi_daily_bulletin": "官方",
-        "us_treasury": "官方",
-        "deutsche_boerse": "官方",
-        "nasdaq_official": "官方",
-        "chinabond": "准官方",
-        "sina": "第三方",
-        "eastmoney": "第三方",
-        "eastmoney_quote": "第三方",
-        "fund_nav": "第三方",
-        "dax_etf": "第三方",
-        "etf_estimate": "项目计算",
-        "etf_to_index": "项目计算",
+    RISK_METRIC_KEYS = {
+        "CSI300", "CSI500", "CSI500_INDEX", "CSI_ALL_SHARE", "CSI1000", "CSI2000",
+        "CSI_BAIJIU", "CHINEXT", "STAR50", "STAR100",
+        "CSI_DIVIDEND", "CSI_DIVIDEND_100", "CSI300_DIVIDEND_LOW_VOL",
+        "CSI_DIVIDEND_QUALITY", "CSI_ALL_DIVIDEND_QUALITY", "CSI_CASH_FLOW",
+        "CNI_FREE_CASH_FLOW", "HSTECH", "HSI", "SPX", "NDX", "DAX",
+        "CAC40", "FTSE100",
+    }
+    SOURCE_TRUST = {
+        "csindex_official": {"level": "official", "label": "官方", "tone": "official", "note": "来自指数公司或交易所官方公开数据。"},
+        "csindex_perf": {"level": "official", "label": "官方", "tone": "official", "note": "来自中证指数官网官方历史行情接口。"},
+        "csindex_perf_snapshot": {"level": "official", "label": "官方", "tone": "official", "note": "来自中证指数官网官方日线行情接口。"},
+        "csindex_indicator": {"level": "official", "label": "官方", "tone": "official", "note": "来自中证指数官网官方估值指标文件。"},
+        "cni_official": {"level": "official", "label": "官方", "tone": "official", "note": "来自国证指数网官方公开数据。"},
+        "hsi_daily_bulletin": {"level": "official", "label": "官方", "tone": "official", "note": "来自恒生指数公司公开日更报表。"},
+        "chinabond": {"level": "official", "label": "官方", "tone": "official", "note": "来自中国债券信息网公开收益率曲线。"},
+        "us_treasury": {"level": "official", "label": "官方", "tone": "official", "note": "来自 U.S. Treasury 官方日收益率曲线。"},
+        "computed_spread": {"level": "official", "label": "官方", "tone": "official", "note": "由本地缓存中的官方收益率曲线计算，原始序列仍可追溯。"},
+        "computed_dividend_yield": {"level": "official_derived", "label": "官方推导", "tone": "official", "note": "由官方价格指数与官方全收益指数逐日计算分红贡献，再滚动252个交易日复利；不是指数公司直接发布的D/P字段。"},
+        "ecb_yield": {"level": "official", "label": "官方", "tone": "official", "note": "来自 European Central Bank 官方收益率曲线数据。"},
+        "cboe_vix": {"level": "official", "label": "官方", "tone": "official", "note": "来自 Cboe 官方 VIX 历史数据。"},
+        "coinbase": {"level": "official", "label": "官方", "tone": "official", "note": "来自 Coinbase Exchange 公开行情接口。"},
+        "coinbase_candles": {"level": "official", "label": "官方", "tone": "official", "note": "来自 Coinbase Exchange 公开日线 candles。"},
+        "binance_public": {"level": "official", "label": "官方", "tone": "official", "note": "来自 Binance 公共市场数据接口。"},
+        "history_snapshot": {"level": "third_party", "label": "第三方", "tone": "third", "note": "来自可复核的历史行情接口并按最新日线生成卡片。"},
+        "usdcny": {"level": "third_party", "label": "第三方", "tone": "third", "note": "来自新浪财经免费外汇快照。"},
+        "deutsche_boerse": {"level": "official", "label": "官方", "tone": "official", "note": "来自 Deutsche Börse 官方页面快照。"},
+        "nasdaq_official": {"level": "official_delayed", "label": "官方延迟", "tone": "official", "note": "来自 Nasdaq Global Indexes 官方页面，按页面 DATA AS OF 展示。"},
+        "sina": {"level": "third_party", "label": "第三方", "tone": "third", "note": "免费第三方行情转发源，需以页面时点为准。"},
+        "eastmoney": {"level": "third_party", "label": "第三方", "tone": "third", "note": "免费第三方行情转发源，需以页面时点为准。"},
+        "eastmoney_quote": {"level": "third_party", "label": "第三方", "tone": "third", "note": "免费第三方行情转发源，需以页面时点为准。"},
+        "tx": {"level": "third_party", "label": "第三方", "tone": "third", "note": "免费第三方历史行情源，需以返回日期为准。"},
+        "hk_sina": {"level": "third_party", "label": "第三方", "tone": "third", "note": "免费第三方港股指数历史源，需以返回日期为准。"},
+        "yahoo_chart": {"level": "third_party", "label": "第三方", "tone": "third", "note": "第三方历史行情接口，适合画图校验，不视为交易所官方接口。"},
+        "fund_nav": {"level": "third_party", "label": "第三方", "tone": "third", "note": "第三方基金净值披露源，需以基金公司公告为最终准绳。"},
+        "fund_nav_accum": {"level": "third_party", "label": "第三方", "tone": "third", "note": "第三方基金累计净值披露源，需以基金公司公告为最终准绳。"},
+        "stoxx_dax": {"level": "official", "label": "官方", "tone": "official", "note": "来自 STOXX/Deutsche Börse 公开DAX历史文件。"},
+        "lse_dory": {"level": "official_delayed", "label": "官方延迟", "tone": "official", "note": "来自 London Stock Exchange 页面使用的 Refinitiv 图表接口，按返回日期展示。"},
     }
     """股票数据提供者 - 使用新浪财经和东方财富API"""
 
@@ -149,12 +193,88 @@ class StockDataProvider:
             "base_pe_percentile": 41.9,  # Wind：历史分位约41.9%，处于合理区间
             "base_dividend_yield": 3.35,  # Wind：近1年股息率约3.35%
         },
+        "CSI500_INDEX": {
+            "name": "中证500",
+            "symbol": "000905",
+            "type": "cn",
+            "currency": "点",
+            "source": "csindex_official",
+            "sina_code": "sh000905",
+            "fallback_source": "sina",
+            "csindex_code": "000905",
+            "update_frequency": "realtime",
+            "source_label": "中证指数官网",
+            "source_url": "https://www.csindex.com.cn/#/indices/family/detail?indexCode=000905",
+            "history_series": {
+                "price": {"label": "指数收益", "symbol": "000905"},
+                "total_return": {"label": "全收益", "symbol": "H00905"},
+            },
+            "history_note": "历史走势使用中证指数官网官方日线；可切换指数收益与全收益指数。",
+            "data_note": "官方日内快照；以中证官网返回的交易日期和交易时间为准。走势图可切换价格指数与全收益指数。",
+        },
+        "CSI_ALL_SHARE": {
+            "name": "中证全指",
+            "symbol": "000985",
+            "type": "cn",
+            "currency": "点",
+            "source": "csindex_perf_snapshot",
+            "csindex_code": "000985",
+            "fallback_source": "eastmoney_quote",
+            "eastmoney_secid": "1.000985",
+            "update_frequency": "daily",
+            "source_label": "中证指数官网",
+            "source_url": "https://www.csindex.com.cn/#/indices/family/detail?indexCode=000985",
+            "history_series": {
+                "price": {"label": "指数收益", "symbol": "000985"},
+                "total_return": {"label": "全收益", "symbol": "H00985"},
+            },
+            "history_note": "历史走势使用中证指数官网官方日线；可切换指数收益与全收益指数。",
+            "data_note": "中证全指官方日更快照；走势可切换价格指数与全收益指数。",
+        },
+        "CSI1000": {
+            "name": "中证1000",
+            "symbol": "000852",
+            "type": "cn",
+            "currency": "点",
+            "source": "csindex_perf_snapshot",
+            "csindex_code": "000852",
+            "fallback_source": "eastmoney_quote",
+            "eastmoney_secid": "1.000852",
+            "update_frequency": "daily",
+            "source_label": "中证指数官网",
+            "source_url": "https://www.csindex.com.cn/#/indices/family/detail?indexCode=000852",
+            "history_series": {
+                "price": {"label": "指数收益", "symbol": "000852"},
+                "total_return": {"label": "全收益", "symbol": "H00852"},
+            },
+            "history_note": "历史走势使用中证指数官网官方日线；可切换指数收益与全收益指数。",
+            "data_note": "中证1000官方日更快照；走势可切换价格指数与全收益指数。",
+        },
+        "CSI2000": {
+            "name": "中证2000",
+            "symbol": "932000",
+            "type": "cn",
+            "currency": "点",
+            "source": "csindex_perf_snapshot",
+            "csindex_code": "932000",
+            "fallback_source": "eastmoney_quote",
+            "eastmoney_secid": "2.932000",
+            "update_frequency": "daily",
+            "source_label": "中证指数官网",
+            "source_url": "https://www.csindex.com.cn/#/indices/family/detail?indexCode=932000",
+            "history_series": {
+                "price": {"label": "指数收益", "symbol": "932000"},
+                "total_return": {"label": "全收益", "symbol": "932000CNY010"},
+            },
+            "history_note": "历史走势使用中证指数官网官方日线；可切换指数收益与全收益指数。",
+            "data_note": "中证2000官方日更快照；走势可切换价格指数与全收益指数。",
+        },
         "CSI_DIVIDEND": {
             "name": "中证红利低波动",
             "symbol": "H30269",
             "type": "cn",
             "currency": "点",
-            "source": "csindex_official",
+            "source": "csindex_perf_snapshot",
             "enabled": True,
             "csindex_code": "H30269",  # 用于获取PE数据
             "fallback_source": "eastmoney_quote",
@@ -162,14 +282,128 @@ class StockDataProvider:
             "update_frequency": "daily",
             "source_label": "中证指数官网",
             "source_url": "https://www.csindex.com.cn/#/indices/family/detail?indexCode=H30269",
-            "history_etf_proxy": "sh560150",
-            "history_source_type": "ETF_PROXY",
-            "chart_badge": "ETF代理",
-            "history_note": "历史走势使用 ETF 代理数据，仅供趋势参考，不等同于中证指数官方历史点位。",
-            "data_note": "官方日更快照；按收盘后数据展示。",
+            "history_series": {
+                "price": {"label": "指数收益", "symbol": "H30269"},
+                "total_return": {"label": "全收益", "symbol": "H20269"},
+            },
+            "history_note": "历史走势图使用中证指数官网官方日线；可切换指数收益与全收益。",
+            "data_note": "官方日更快照；按收盘后数据展示。走势图可切换价格指数与全收益指数。",
             "base_pe": 7.74,  # 雪球数据：2025年PE-TTM约7.74，近十年百分位73.73%
             "base_pe_percentile": 73.73,  # 雪球：近十年百分位73.73%
             "base_dividend_yield": 4.57,  # 雪球：当前股息率约4.57%
+        },
+        "CSI_DIVIDEND_100": {
+            "name": "中证红利低波100",
+            "symbol": "930955",
+            "type": "cn",
+            "currency": "点",
+            "source": "csindex_perf_snapshot",
+            "csindex_code": "930955",
+            "fallback_source": "eastmoney_quote",
+            "eastmoney_secid": "2.930955",
+            "update_frequency": "daily",
+            "source_label": "中证指数官网",
+            "source_url": "https://www.csindex.com.cn/#/indices/family/detail?indexCode=930955",
+            "history_series": {
+                "price": {"label": "指数收益", "symbol": "930955"},
+                "total_return": {"label": "全收益", "symbol": "H20955"},
+            },
+            "history_note": "历史走势图使用中证指数官网官方日线；可切换指数收益与全收益。",
+            "data_note": "中证红利低波动100指数，官方日更快照；走势图可切换价格指数与全收益指数。",
+        },
+        "CSI300_DIVIDEND_LOW_VOL": {
+            "name": "沪深300红利低波",
+            "symbol": "930740",
+            "type": "cn",
+            "currency": "点",
+            "source": "csindex_perf_snapshot",
+            "csindex_code": "930740",
+            "fallback_source": "eastmoney_quote",
+            "eastmoney_secid": "2.930740",
+            "update_frequency": "daily",
+            "source_label": "中证指数官网",
+            "source_url": "https://www.csindex.com.cn/#/indices/family/detail?indexCode=930740",
+            "history_series": {
+                "price": {"label": "指数收益", "symbol": "930740"},
+                "total_return": {"label": "全收益", "symbol": "H20740"},
+            },
+            "history_note": "历史走势图使用中证指数官网官方日线；可切换指数收益与全收益。",
+            "data_note": "沪深300红利低波动指数，官方日更快照；走势图可切换价格指数与全收益指数。",
+        },
+        "CSI_DIVIDEND_QUALITY": {
+            "name": "红利质量",
+            "symbol": "931468",
+            "type": "cn",
+            "currency": "点",
+            "source": "csindex_perf_snapshot",
+            "csindex_code": "931468",
+            "fallback_source": "eastmoney_quote",
+            "eastmoney_secid": "2.931468",
+            "update_frequency": "daily",
+            "source_label": "中证指数官网",
+            "source_url": "https://www.csindex.com.cn/#/indices/family/detail?indexCode=931468",
+            "history_series": {
+                "price": {"label": "指数收益", "symbol": "931468"},
+                "total_return": {"label": "全收益", "symbol": "921468"},
+            },
+            "history_note": "历史走势图使用中证指数官网官方日线；可切换指数收益与全收益。",
+            "data_note": "中证红利质量指数，官方日更快照；走势图可切换价格指数与全收益指数。",
+        },
+        "CSI_ALL_DIVIDEND_QUALITY": {
+            "name": "中证红利质量",
+            "symbol": "932315",
+            "type": "cn",
+            "currency": "点",
+            "source": "csindex_perf_snapshot",
+            "csindex_code": "932315",
+            "fallback_source": "eastmoney_quote",
+            "eastmoney_secid": "2.932315",
+            "update_frequency": "daily",
+            "source_label": "中证指数官网",
+            "source_url": "https://www.csindex.com.cn/#/indices/family/detail?indexCode=932315",
+            "history_series": {
+                "price": {"label": "指数收益", "symbol": "932315"},
+                "total_return": {"label": "全收益", "symbol": "932315CNY010"},
+            },
+            "history_note": "历史走势图使用中证指数官网官方日线；可切换指数收益与全收益。",
+            "data_note": "中证全指红利质量指数，官方日更快照；走势图可切换价格指数与全收益指数。",
+        },
+        "CSI_CASH_FLOW": {
+            "name": "中证现金流",
+            "symbol": "932365",
+            "type": "cn",
+            "currency": "点",
+            "source": "csindex_perf_snapshot",
+            "csindex_code": "932365",
+            "fallback_source": "eastmoney_quote",
+            "eastmoney_secid": "2.932365",
+            "update_frequency": "daily",
+            "source_label": "中证指数官网",
+            "source_url": "https://www.csindex.com.cn/#/indices/family/detail?indexCode=932365",
+            "history_series": {
+                "price": {"label": "指数收益", "symbol": "932365"},
+                "total_return": {"label": "全收益", "symbol": "932365CNY010"},
+            },
+            "history_note": "历史走势图使用中证指数官网官方日线；可切换指数收益与全收益。",
+            "data_note": "中证全指自由现金流指数，官方日更快照；走势图可切换价格指数与全收益指数。",
+        },
+        "CNI_FREE_CASH_FLOW": {
+            "name": "国证自由现金流",
+            "symbol": "980092",
+            "type": "cn",
+            "currency": "点",
+            "source": "cni_official",
+            "fallback_source": "eastmoney_quote",
+            "eastmoney_secid": "0.980092",
+            "update_frequency": "daily",
+            "source_label": "国证指数网",
+            "source_url": "https://www.cnindex.com.cn/module/index-detail.html?act_menu=1&indexCode=980092",
+            "history_series": {
+                "price": {"label": "指数收益", "symbol": "980092"},
+                "total_return": {"label": "全收益", "symbol": "480092"},
+            },
+            "history_note": "历史走势图使用国证指数网官方日线；可切换指数收益与全收益指数。",
+            "data_note": "国证自由现金流指数，官方日更快照；走势图可切换价格指数与收益指数。",
         },
         "CSI_BAIJIU": {
             "name": "中证白酒指数",
@@ -252,6 +486,181 @@ class StockDataProvider:
             "source_url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates",
             "data_note": "U.S. Treasury daily yield curve 官方公开数据，按发布日期更新。",
         },
+        "CN1Y": {
+            "name": "中国国债一年收益率",
+            "symbol": "CN1Y",
+            "enabled": False,
+            "type": "bond",
+            "currency": "%",
+            "source": "chinabond",
+            "history_key": "CN1Y",
+            "update_frequency": "daily",
+            "source_label": "中国债券信息网",
+            "source_url": "https://yield.chinabond.com.cn/",
+            "data_note": "中国债券信息网公开国债收益率曲线，按工作日更新。",
+        },
+        "CN30Y": {
+            "name": "中国国债三十年收益率",
+            "symbol": "CN30Y",
+            "enabled": False,
+            "type": "bond",
+            "currency": "%",
+            "source": "chinabond",
+            "history_key": "CN30Y",
+            "update_frequency": "daily",
+            "source_label": "中国债券信息网",
+            "source_url": "https://yield.chinabond.com.cn/",
+            "data_note": "中国债券信息网公开国债收益率曲线，按工作日更新。",
+        },
+        "CN10Y_1Y_SPREAD": {
+            "name": "中国10Y-1Y利差",
+            "symbol": "CN10Y-1Y",
+            "enabled": False,
+            "type": "bond",
+            "currency": "%",
+            "source": "computed_spread",
+            "history_key": "CN10Y_1Y_SPREAD",
+            "update_frequency": "daily",
+            "source_label": "本地计算",
+            "source_url": "https://yield.chinabond.com.cn/",
+            "data_note": "由中国债券信息网10年与1年国债收益率曲线本地计算，单位为百分点。",
+        },
+        "US2Y": {
+            "name": "美国国债两年收益率",
+            "symbol": "US2Y",
+            "enabled": False,
+            "type": "bond",
+            "currency": "%",
+            "source": "us_treasury",
+            "history_key": "US2Y",
+            "update_frequency": "daily",
+            "source_label": "U.S. Treasury",
+            "source_url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates",
+            "data_note": "U.S. Treasury daily yield curve 官方公开数据，按发布日期更新。",
+        },
+        "US3M": {
+            "name": "美国13周T-Bill收益率",
+            "symbol": "US13W",
+            "enabled": False,
+            "type": "bond",
+            "currency": "%",
+            "source": "history_snapshot",
+            "history_key": "US3M",
+            "update_frequency": "delayed",
+            "source_label": "Yahoo Finance Chart",
+            "source_url": "https://finance.yahoo.com/quote/%5EIRX/",
+            "data_note": "美国13周T-Bill收益率延迟曲线；财政部官方接口被403时使用，明确标注为第三方延迟。",
+        },
+        "US10Y_2Y_SPREAD": {
+            "name": "美国10Y-2Y利差",
+            "symbol": "US10Y-2Y",
+            "enabled": False,
+            "type": "bond",
+            "currency": "%",
+            "source": "computed_spread",
+            "history_key": "US10Y_2Y_SPREAD",
+            "update_frequency": "daily",
+            "source_label": "本地计算",
+            "source_url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates",
+            "data_note": "由 U.S. Treasury 10年与2年收益率曲线本地计算，单位为百分点。",
+        },
+        "CN_US_10Y_SPREAD": {
+            "name": "中美10年利差",
+            "symbol": "CN-US10Y",
+            "enabled": False,
+            "type": "bond",
+            "currency": "%",
+            "source": "computed_spread",
+            "history_key": "CN_US_10Y_SPREAD",
+            "update_frequency": "daily",
+            "source_label": "本地计算",
+            "source_url": "https://yield.chinabond.com.cn/",
+            "data_note": "由中国债券信息网CN10Y与U.S. Treasury US10Y本地计算，单位为百分点。",
+        },
+        "EU10Y": {
+            "name": "欧元区10年AAA收益率",
+            "symbol": "EU10Y",
+            "type": "bond",
+            "currency": "%",
+            "source": "ecb_yield",
+            "history_key": "EU10Y",
+            "update_frequency": "daily",
+            "source_label": "European Central Bank",
+            "source_url": "https://data.ecb.europa.eu/",
+            "data_note": "欧洲央行欧元区AAA收益率曲线公开数据，按工作日更新。",
+        },
+        "VIX": {
+            "name": "VIX恐慌指数",
+            "symbol": "VIX",
+            "type": "risk",
+            "currency": "点",
+            "source": "cboe_vix",
+            "history_key": "VIX",
+            "update_frequency": "daily",
+            "source_label": "Cboe",
+            "source_url": "https://www.cboe.com/tradable_products/vix/vix_historical_data/",
+            "data_note": "Cboe官方VIX历史数据，按交易日更新。",
+        },
+        "USDCNY": {
+            "name": "美元兑人民币",
+            "symbol": "USDCNY",
+            "type": "fx",
+            "currency": "",
+            "source": "usdcny",
+            "update_frequency": "realtime",
+            "source_label": "新浪财经外汇快照",
+            "source_url": "https://finance.sina.com.cn/money/forex/",
+            "data_note": "免费外汇快照；仅用于跨市场换算参考，以返回时点为准。",
+            "history_available": False,
+        },
+        "BTCUSD": {
+            "name": "比特币",
+            "symbol": "BTC-USD",
+            "type": "crypto",
+            "currency": "美元",
+            "source": "coinbase",
+            "history_key": "BTCUSD",
+            "update_frequency": "realtime",
+            "source_label": "Coinbase Exchange",
+            "source_url": "https://api.exchange.coinbase.com/products/BTC-USD",
+            "data_note": "Coinbase Exchange公开成交行情；卡片为实时快照，走势为日线蜡烛。",
+        },
+        "ETHUSD": {
+            "name": "以太币",
+            "symbol": "ETH-USD",
+            "type": "crypto",
+            "currency": "美元",
+            "source": "coinbase",
+            "history_key": "ETHUSD",
+            "update_frequency": "realtime",
+            "source_label": "Coinbase Exchange",
+            "source_url": "https://api.exchange.coinbase.com/products/ETH-USD",
+            "data_note": "Coinbase Exchange公开成交行情；卡片为实时快照，走势为日线蜡烛。",
+        },
+        "CAC40": {
+            "name": "法国CAC40",
+            "symbol": "CAC40",
+            "type": "global",
+            "currency": "点",
+            "source": "history_snapshot",
+            "history_key": "CAC40",
+            "update_frequency": "delayed",
+            "source_label": "Yahoo Finance Chart",
+            "source_url": "https://www.euronext.com/en/products/indices/FR0003500008-XPAR",
+            "data_note": "免费可复核延迟日线；官方Euronext页面作为口径参考。CAC40 GR候选免费源不稳定或只返回单点/短窗口，暂不接入全收益曲线。",
+        },
+        "FTSE100": {
+            "name": "英国富时100",
+            "symbol": "FTSE100",
+            "type": "global",
+            "currency": "点",
+            "source": "history_snapshot",
+            "history_key": "FTSE100",
+            "update_frequency": "delayed",
+            "source_label": "London Stock Exchange / Refinitiv",
+            "source_url": "https://www.londonstockexchange.com/indices/ftse-100",
+            "data_note": "LSE页面图表接口；.FTSE为价格指数，.TRIUKX为FTSE100 Total Return，全收益从接口可得日期开始展示。",
+        },
         "DAX": {
             "name": "德国DAX指数",
             "symbol": "DAX",
@@ -265,8 +674,8 @@ class StockDataProvider:
             "source_label": "Deutsche Börse",
             "source_url": "https://live.deutsche-boerse.com/indices/dax",
             "history_available": True,
-            "history_note": "德交所官方页面负责最新收盘快照；官方公开历史仅能稳定获取 STOXX 近3个月免费文件，6月/1年暂不开放。",
-            "data_note": "德交所官方页面快照；按收盘后日更口径展示。",
+            "history_note": "DAX headline index is a performance/total-return index. 历史图使用STOXX公开3个月文件：DAXK为价格指数，DAX为全收益/performance口径。",
+            "data_note": "德交所官方页面快照；DAX卡片为headline performance/全收益口径，走势图可切换DAXK价格指数与DAX全收益。",
             "base_pe": 18.6,  # 数据：2025年11月PE-TTM约18.6，近10年分位约62.57%
             "base_pe_percentile": 62.57,  # 近10年分位约62.57%，处于合理偏高区间
             "base_dividend_yield": 3.2,  # 估算股息率约3.2%
@@ -335,8 +744,37 @@ class StockDataProvider:
         self.socketio = socketio
         self.running = False
         self.update_thread = None
-        self.cache = {}
+        self.db = get_market_cache()
+        self.cache = self.db.load_all_snapshots(max_age_seconds=self.MAX_STALE_SECONDS)
         self.last_update = None
+        if self.cache:
+            latest_cached_at = max(
+                (
+                    datetime.fromisoformat(item["_cache_updated_at"])
+                    for item in self.cache.values()
+                    if item.get("_cache_updated_at")
+                ),
+                default=None,
+            )
+            self.last_update = latest_cached_at
+        cached_valuations = self.db.load_all_valuations(max_age_seconds=self.VALUATION_REFRESH_SECONDS)
+        if cached_valuations:
+            valuation_keys = self._valuation_enabled_keys()
+            self._valuation_cache = {
+                key: value for key, value in cached_valuations.items() if key in valuation_keys
+            }
+            self._valuation_cache_time = datetime.now()
+            for key, cached in self.cache.items():
+                if key in cached_valuations and key in valuation_keys:
+                    cached["valuation"] = cached_valuations[key]
+                else:
+                    cached.pop("valuation", None)
+                self._attach_history_series(key, cached)
+                self._attach_data_quality(cached)
+        else:
+            for key, cached in self.cache.items():
+                self._attach_history_series(key, cached)
+                self._attach_data_quality(cached)
         self._last_valuation_refresh = None
         self.session = requests.Session()
         self.session.trust_env = False
@@ -350,80 +788,44 @@ class StockDataProvider:
             "https": None,
         }
 
-    def _source_type_for(self, source: str) -> str | None:
-        return self.SOURCE_TYPE_BY_SOURCE.get(source)
-
-    def _delay_note_for(self, source_type: str | None, update_frequency: str | None) -> str | None:
-        if update_frequency == "delayed":
-            return "延迟行情，仅供参考"
-        if source_type == "第三方":
-            return "第三方免费行情，仅供参考"
-        return None
-
-    def _sample_window_label(self, years: float | int | None) -> str | None:
-        if years in (None, ""):
-            return None
-        try:
-            value = float(years)
-        except Exception:
-            return None
-        if value >= 9.5:
-            return "样本近10年"
-        if value <= 0:
-            return "样本区间有限"
-        return f"样本约{value:.1f}年"
-
-    def _metric_type_for(self, key: str, valuation: dict) -> str | None:
-        if not valuation:
-            return None
-        if valuation.get("is_price_percentile"):
-            if key in {"CN10Y", "US10Y"}:
-                return "收益率分位"
-            if key == "WANJIA_GOLD":
-                return "净值分位"
-            return "价格分位"
-        if key in self.MULTPL_PE_KEYS:
-            return "月频PE分位"
-        if valuation.get("pe_percentile") is not None:
-            return "PE分位"
-        return None
-
-    def _enrich_valuation_metadata(self, key: str, valuation: dict | None) -> dict | None:
-        if not valuation:
-            return valuation
-
-        valuation = dict(valuation)
-        metric_type = valuation.get("percentile_type") or self._metric_type_for(key, valuation)
-        window = valuation.get("percentile_window") or self._sample_window_label(valuation.get("years_of_data"))
-        source = valuation.get("source")
-        source_type = "项目计算" if valuation.get("is_price_percentile") else None
-        if key in self.MULTPL_PE_KEYS:
-            source_type = "第三方"
-        elif source == "中证指数官网":
-            source_type = "官方"
-
-        valuation.setdefault("percentile_type", metric_type)
-        valuation.setdefault("percentile_window", window or "样本区间有限")
-        if metric_type:
-            valuation.setdefault(
-                "percentile_label",
-                f"{metric_type}，{valuation['percentile_window']}",
-            )
-        valuation.setdefault("is_calculated_metric", metric_type is not None)
-        valuation.setdefault(
-            "metric_note",
-            "分位和提示由本项目基于历史序列计算，不是官方评级或投资建议。"
-            if metric_type else None,
-        )
-        valuation.setdefault("source_type", source_type)
-        valuation.setdefault("is_official_source", source_type == "官方")
-        valuation.setdefault("signal_rule_note", "项目规则生成，不是官方评级，不构成投资建议。")
-        return valuation
-
     def _is_snapshot_fresh(self) -> bool:
         if not self.cache or not self.last_update:
             return False
+        for key, config in self.INDICES.items():
+            if config.get("enabled", True) is False:
+                continue
+            cached = self.cache.get(key)
+            if not cached or not self._is_cached_snapshot_compatible(cached, config):
+                return False
         return (datetime.now() - self.last_update).total_seconds() < self.SNAPSHOT_TTL_SECONDS
+
+    def _snapshot_ttl_for_config(self, config: dict) -> int:
+        if config.get("update_frequency") == "daily":
+            return self.DAILY_SOURCE_TTL_SECONDS
+        return self.SNAPSHOT_TTL_SECONDS
+
+    def _valuation_enabled_keys(self) -> set:
+        return (
+            self.REALTIME_VALUATION_KEYS
+            | self.DAILY_VALUATION_KEYS
+            | self.PRICE_PERCENTILE_KEYS
+            | self.MULTPL_PE_KEYS
+        )
+
+    def _is_cached_snapshot_compatible(self, cached: dict, config: dict) -> bool:
+        """Reject stale cache records after a symbol's source policy changes."""
+        if not cached:
+            return False
+        source = cached.get("source")
+        allowed_sources = {
+            config.get("source"),
+            config.get("fallback_source"),
+        }
+        allowed_sources.discard(None)
+        allowed_sources.discard("")
+        if not allowed_sources:
+            return True
+        return source in allowed_sources
 
     def _can_use_cached_record(self, cached: dict) -> bool:
         if not cached:
@@ -443,6 +845,170 @@ class StockDataProvider:
             return False
         return (datetime.now() - timestamp).total_seconds() < self.DAILY_SOURCE_TTL_SECONDS
 
+    def _source_trust(self, source: str, *, fallback: bool = False, label: str = None) -> dict:
+        trust = dict(self.SOURCE_TRUST.get(source) or {
+            "level": "unknown",
+            "label": "待核验",
+            "tone": "warn",
+            "note": "未知来源，需补充核验规则。",
+        })
+        if label:
+            trust["label"] = label
+        if fallback:
+            trust["level"] = "fallback"
+            trust["label"] = "备用源"
+            trust["tone"] = "warn"
+            trust["note"] = "主源不可用时使用的备用行情源，需重点查看数据时点。"
+        return trust
+
+    def _history_series_trust(self, source: str, label: str) -> dict:
+        label_text = label or ""
+        if "代理" in label_text:
+            return {
+                "level": "proxy",
+                "label": "代理",
+                "tone": "warn",
+                "note": "这不是官方全收益指数，只能作为可投资载体或近似收益对比。",
+            }
+        if "同源" in label_text:
+            return {
+                "level": "same_source",
+                "label": "同源",
+                "tone": "muted",
+                "note": "第二条线与价格线同源，仅用于占位/对照，不代表全收益。",
+            }
+        if "复权" in label_text:
+            return {
+                "level": "adjusted_proxy",
+                "label": "复权",
+                "tone": "warn",
+                "note": "ETF复权收益，不是指数公司官方全收益指数。",
+            }
+        return self._source_trust(source)
+
+    def _stale_seconds(self, payload: dict) -> float | None:
+        timestamp = payload.get("fetched_at") or payload.get("timestamp")
+        if not timestamp:
+            return None
+        try:
+            return max(0, (datetime.now() - datetime.fromisoformat(timestamp)).total_seconds())
+        except (TypeError, ValueError):
+            return None
+
+    def _attach_data_quality(self, result: dict) -> dict:
+        flags = []
+        source = result.get("source")
+        trust = self._source_trust(
+            source,
+            fallback=bool(result.get("actual_source_label")),
+        )
+        result["source_trust"] = trust
+
+        stale_seconds = self._stale_seconds(result)
+        if stale_seconds is not None:
+            result["stale_seconds"] = int(stale_seconds)
+            max_age = self.DAILY_SOURCE_TTL_SECONDS if result.get("update_frequency") == "daily" else self.MAX_STALE_SECONDS
+            if stale_seconds > max_age:
+                flags.append("stale_snapshot")
+
+        if "刷新失败" in (result.get("data_note") or ""):
+            flags.append("stale_fallback")
+        if trust.get("level") in {"third_party", "fallback"}:
+            flags.append("non_official_source")
+        if result.get("update_frequency") == "delayed":
+            flags.append("delayed")
+
+        result["data_quality_flags"] = sorted(set(flags))
+        return result
+
+    def _attach_history_series(self, key: str, result: dict) -> dict:
+        manager = get_history_manager()
+        history_config = manager.INDICES.get(key, {})
+        if history_config.get("series"):
+            series_meta = {}
+            for series_key, series_cfg in history_config["series"].items():
+                series_config = manager._get_series_config(key, series_key) or {}
+                source = series_config.get("source", history_config.get("source"))
+                allowed_periods = [
+                    period
+                    for period in manager.PERIOD_DAYS
+                    if manager._is_period_supported(series_config, period)
+                ]
+                has_data = True
+                if series_key in {"dividend_return", "dividend_yield"}:
+                    # Do not expose a dividend-yield tab unless we have real rows
+                    # cached locally. Empty derived/official controls are worse
+                    # than absent controls.
+                    rows = manager.load_local_data(key, "1mo", series_key)
+                    if not rows:
+                        rows = manager.get_history_data(key, "1mo", series=series_key) or []
+                    has_data = bool(rows)
+
+                series_meta[series_key] = {
+                    "label": series_cfg.get("label", series_key),
+                    "symbol": series_cfg.get("symbol"),
+                    "source": source,
+                    "allowed_periods": allowed_periods,
+                    "history_max_period": series_config.get("history_max_period"),
+                    "limited_history": bool(series_config.get("limited_history")),
+                    "has_data": has_data,
+                    "trust": self._history_series_trust(
+                        source,
+                        series_cfg.get("label", series_key),
+                    ),
+                }
+                if series_key in {"dividend_return", "dividend_yield"} and not has_data:
+                    series_meta[series_key]["availability_note"] = (
+                        "当前没有返回可用历史行，暂不展示该曲线按钮。"
+                    )
+            result["history_series"] = series_meta
+        return result
+
+    def _attach_risk_metrics(self, key: str, result: dict) -> dict:
+        if key not in self.RISK_METRIC_KEYS:
+            return result
+        try:
+            manager = get_history_manager()
+            rows = manager.db.load_history(
+                key,
+                "price",
+                period_days=3650,
+                source_signature=manager._source_signature(key, "price"),
+            )
+            closes = [
+                (row.get("date"), float(row.get("close")))
+                for row in rows or []
+                if row.get("date") and row.get("close") not in (None, "")
+            ]
+            closes = [(date, close) for date, close in closes if close > 0]
+            if len(closes) < 60:
+                return result
+
+            current = float(result.get("price") or closes[-1][1])
+            high_date, high_value = max(closes, key=lambda item: item[1])
+            distance_high = (current / high_value - 1) * 100 if high_value else 0
+
+            peak = closes[0][1]
+            max_drawdown = 0.0
+            for _date, close in closes:
+                peak = max(peak, close)
+                if peak:
+                    max_drawdown = min(max_drawdown, close / peak - 1)
+
+            result["risk_metrics"] = {
+                "years": round(len(closes) / 252, 1),
+                "data_start": closes[0][0],
+                "data_end": closes[-1][0],
+                "distance_10y_high_pct": round(distance_high, 2),
+                "max_drawdown_pct": round(max_drawdown * 100, 2),
+                "ten_year_high": round(high_value, 2),
+                "ten_year_high_date": high_date,
+                "source": "本地历史库",
+            }
+        except Exception:
+            pass
+        return result
+
     def _build_index_result(self, key: str, config: dict, data: dict) -> dict:
         result = {
             **config,
@@ -451,6 +1017,12 @@ class StockDataProvider:
         # 配置中指定的 name 始终优先（避免 API 返回的原始名覆盖中文简称）
         if config.get("name"):
             result["name"] = config["name"]
+        registry_entry = get_source_entry(key) or {}
+        if registry_entry:
+            result["allowed_periods"] = registry_entry.get("allowed_periods", [])
+            result["supports_chart"] = registry_entry.get("supports_chart", True)
+            result["supports_total_return"] = registry_entry.get("supports_total_return", False)
+            result["registry_notes"] = registry_entry.get("notes", "")
         result.pop("enabled", None)
         for field in list(result):
             if field.startswith("base_") or field in {"etf_code", "etf_index_ratio"}:
@@ -460,9 +1032,21 @@ class StockDataProvider:
             "eastmoney": "东方财富",
             "eastmoney_quote": "东方财富",
             "csindex_official": "中证指数官网",
+            "csindex_perf_snapshot": "中证指数官网",
+            "csindex_indicator": "中证指数官网估值指标文件",
+            "cni_official": "国证指数网",
             "hsi_daily_bulletin": "恒生指数公司公开日更报表",
             "chinabond": "中国债券信息网",
             "us_treasury": "U.S. Treasury",
+            "computed_spread": "本地计算",
+            "ecb_yield": "European Central Bank",
+            "cboe_vix": "Cboe",
+            "coinbase": "Coinbase Exchange",
+            "coinbase_candles": "Coinbase Exchange",
+            "binance_public": "Binance Public Market Data",
+            "history_snapshot": "Yahoo Finance Chart",
+            "lse_dory": "London Stock Exchange / Refinitiv",
+            "usdcny": "新浪财经外汇快照",
             "deutsche_boerse": "Deutsche Börse",
             "nasdaq_official": "Nasdaq Global Indexes",
         }.get(result.get("source")))
@@ -472,15 +1056,12 @@ class StockDataProvider:
             "daily": "日更",
             "delayed": "延迟",
         }.get(result.get("update_frequency"), result.get("update_frequency")))
+        self._attach_history_series(key, result)
+        self._attach_risk_metrics(key, result)
         result.setdefault("fetched_at", result.get("timestamp"))
-        source_type = self._source_type_for(result.get("source"))
-        result.setdefault("source_type", source_type)
-        result.setdefault("is_official_source", source_type == "官方")
-        result.setdefault("delay_note", self._delay_note_for(source_type, result.get("update_frequency")))
-        result.setdefault("is_calculated_metric", False)
+        self._attach_data_quality(result)
         if key in self._valuation_cache:
-            result["valuation"] = self._enrich_valuation_metadata(key, self._valuation_cache[key])
-            result["is_calculated_metric"] = bool(result["valuation"].get("is_calculated_metric"))
+            result["valuation"] = self._valuation_cache[key]
         return result
 
     def _fetch_index_data(self, config: dict) -> dict:
@@ -505,6 +1086,12 @@ class StockDataProvider:
         if source == "csindex_official":
             return self.get_csindex_official_data(config)
 
+        if source == "csindex_perf_snapshot":
+            return self.get_csindex_perf_snapshot_data(config)
+
+        if source == "cni_official":
+            return self.get_cni_official_data(config)
+
         if source == "hsi_daily_bulletin":
             return self._fetch_hsi_daily_bulletin_snapshot(config)
 
@@ -513,6 +1100,15 @@ class StockDataProvider:
 
         if source == "us_treasury":
             return self._fetch_us_treasury_yield_snapshot(config)
+
+        if source in {"computed_spread", "ecb_yield", "cboe_vix", "history_snapshot"}:
+            return self._fetch_history_backed_snapshot(config)
+
+        if source == "coinbase":
+            return self._fetch_coinbase_ticker_snapshot(config)
+
+        if source == "usdcny":
+            return self._fetch_usdcny_snapshot(config)
 
         if source == "deutsche_boerse":
             return self.get_deutsche_boerse_index_data(config)
@@ -610,17 +1206,310 @@ class StockDataProvider:
             "timestamp": datetime.now().isoformat(),
             "data_as_of": latest.get("date"),
             "trade_date": latest.get("date"),
+            "source": latest.get("source_type") or config.get("source"),
+            "source_label": latest.get("source_label") or config.get("source_label"),
         }
+
+    def _build_latest_ohlc_snapshot_from_history(self, key: str, config: dict, history: list) -> dict | None:
+        """Build an index card snapshot from the latest official daily OHLC row."""
+        if not history:
+            return None
+
+        ordered = sorted(history, key=lambda item: item.get("date") or "")
+        latest = ordered[-1]
+        previous = ordered[-2] if len(ordered) >= 2 else latest
+        price = float(latest.get("close", 0) or 0)
+        prev_close = float(previous.get("close", price) or price)
+        change = round(price - prev_close, 2)
+        change_pct = round((change / prev_close * 100) if prev_close else 0, 2)
+
+        def number(field: str, fallback: float) -> float:
+            value = latest.get(field)
+            try:
+                if value in (None, "") or pd.isna(value):
+                    return fallback
+                return float(value)
+            except Exception:
+                return fallback
+
+        return {
+            "name": config.get("name", key),
+            "price": round(price, 2),
+            "change": change,
+            "change_pct": change_pct,
+            "prev_close": round(prev_close, 2),
+            "open": round(number("open", price), 2),
+            "high": round(number("high", price), 2),
+            "low": round(number("low", price), 2),
+            "volume": int(number("volume", 0)),
+            "timestamp": datetime.now().isoformat(),
+            "data_as_of": latest.get("date"),
+            "trade_date": latest.get("date"),
+            "source": latest.get("source_type") or config.get("source"),
+            "source_label": latest.get("source_label") or config.get("source_label"),
+        }
+
+    def get_csindex_perf_snapshot_data(self, config: dict) -> dict | None:
+        """Use CSI official daily performance history as a stable daily snapshot."""
+        symbol = config.get("symbol")
+        if not symbol:
+            return None
+        try:
+            history = get_history_manager()._fetch_csindex_perf_history(symbol, days=20)
+            return self._build_latest_ohlc_snapshot_from_history(symbol, config, history)
+        except Exception as e:
+            print(f"中证官方日线快照获取失败 {symbol}: {e}")
+            return None
+
+    def _normalize_cni_history_frame(self, df: pd.DataFrame) -> list | None:
+        if df is None or df.empty:
+            return None
+
+        result = []
+        for _, row in df.iterrows():
+            try:
+                date = pd.to_datetime(row.get("日期")).strftime("%Y-%m-%d")
+                close_value = float(row.get("收盘价"))
+                open_value = row.get("开盘价", close_value)
+                high_value = row.get("最高价", close_value)
+                low_value = row.get("最低价", close_value)
+                volume_value = row.get("成交量", 0)
+
+                def clean(value, fallback):
+                    try:
+                        if value in (None, "") or pd.isna(value):
+                            return fallback
+                        return float(value)
+                    except Exception:
+                        return fallback
+
+                result.append(
+                    {
+                        "date": date,
+                        "open": round(clean(open_value, close_value), 2),
+                        "high": round(clean(high_value, close_value), 2),
+                        "low": round(clean(low_value, close_value), 2),
+                        "close": round(close_value, 2),
+                        "volume": int(clean(volume_value, 0) * 10000),
+                    }
+                )
+            except Exception:
+                continue
+
+        return sorted(result, key=lambda item: item["date"]) or None
+
+    def get_cni_official_data(self, config: dict) -> dict | None:
+        """Fetch CNI index data from the public CNI index feed exposed by AkShare."""
+        if ak is None:
+            return None
+
+        symbol = config.get("symbol")
+        if not symbol:
+            return None
+
+        try:
+            all_df = ak.index_all_cni()
+            current_row = None
+            if all_df is not None and not all_df.empty and "指数代码" in all_df.columns:
+                matched = all_df[all_df["指数代码"].astype(str) == str(symbol)]
+                if not matched.empty:
+                    current_row = matched.iloc[0]
+
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=20)
+            hist_df = ak.index_hist_cni(
+                symbol=str(symbol),
+                start_date=start_date.strftime("%Y%m%d"),
+                end_date=end_date.strftime("%Y%m%d"),
+            )
+            history = self._normalize_cni_history_frame(hist_df)
+            snapshot = self._build_latest_ohlc_snapshot_from_history(symbol, config, history)
+            if not snapshot:
+                return None
+
+            if current_row is not None:
+                try:
+                    price = float(current_row.get("收盘点位"))
+                    pct_decimal = float(current_row.get("涨跌幅", 0) or 0)
+                    prev_close = price / (1 + pct_decimal) if pct_decimal > -1 else snapshot["prev_close"]
+                    snapshot["price"] = round(price, 2)
+                    snapshot["change_pct"] = round(pct_decimal * 100, 2)
+                    snapshot["change"] = round(price - prev_close, 2)
+                    snapshot["prev_close"] = round(prev_close, 2)
+                    snapshot["cni_pe_ttm"] = round(float(current_row.get("PE滚动")), 2)
+                except Exception:
+                    pass
+
+            return snapshot
+        except Exception as e:
+            print(f"国证官方数据获取失败 {symbol}: {e}")
+            return None
 
     def _fetch_chinabond_yield_snapshot(self, config: dict) -> dict | None:
         manager = get_history_manager()
-        history = manager.get_history_data("CN10Y", "1mo")
-        return self._build_daily_snapshot_from_history("CN10Y", config, history)
+        key = config.get("history_key") or config.get("symbol") or "CN10Y"
+        history = manager.get_history_data(key, "1mo")
+        return self._build_daily_snapshot_from_history(key, config, history)
 
     def _fetch_us_treasury_yield_snapshot(self, config: dict) -> dict | None:
         manager = get_history_manager()
-        history = manager.get_history_data("US10Y", "1mo")
-        return self._build_daily_snapshot_from_history("US10Y", config, history)
+        key = config.get("history_key") or config.get("symbol") or "US10Y"
+        history = manager.get_history_data(key, "1mo")
+        return self._build_daily_snapshot_from_history(key, config, history)
+
+    def _fetch_history_backed_snapshot(self, config: dict) -> dict | None:
+        key = config.get("history_key") or config.get("symbol")
+        if not key:
+            return None
+        history = get_history_manager().get_history_data(key, "1mo")
+        return self._build_daily_snapshot_from_history(key, config, history)
+
+    def _fetch_coinbase_ticker_snapshot(self, config: dict) -> dict | None:
+        product_id = config.get("symbol")
+        if not product_id:
+            return None
+        try:
+            response = self.session.get(
+                f"https://api.exchange.coinbase.com/products/{product_id}/ticker",
+                headers={**self.session.headers, "Accept": "application/json"},
+                timeout=10,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            price = self._parse_market_number(payload.get("price"))
+            if price <= 0:
+                return None
+
+            history_key = config.get("history_key")
+            history = get_history_manager().get_history_data(history_key, "1mo") if history_key else []
+            snapshot = self._build_daily_snapshot_from_history(history_key or product_id, config, history)
+            if not snapshot:
+                snapshot = {
+                    "name": config.get("name", product_id),
+                    "prev_close": price,
+                    "open": price,
+                    "high": price,
+                    "low": price,
+                    "volume": 0,
+                }
+            prev_close = float(snapshot.get("prev_close") or price)
+            change = price - prev_close
+            snapshot.update({
+                "price": round(price, 2),
+                "change": round(change, 2),
+                "change_pct": round((change / prev_close * 100) if prev_close else 0, 2),
+                "timestamp": datetime.now().isoformat(),
+                "fetched_at": datetime.now().isoformat(),
+                "data_as_of": payload.get("time") or snapshot.get("data_as_of"),
+                "trade_date": str(payload.get("time") or snapshot.get("trade_date") or "")[:10],
+            })
+            return snapshot
+        except Exception as e:
+            print(f"Coinbase 数据获取失败 {product_id}: {e}")
+            return self._fetch_crypto_yahoo_fallback_snapshot(config, reason=str(e))
+
+    def _fetch_crypto_yahoo_fallback_snapshot(self, config: dict, reason: str = "") -> dict | None:
+        """Use Yahoo's free crypto chart as a clearly labelled fallback."""
+        symbol = config.get("symbol")
+        if not symbol:
+            return None
+        try:
+            history = get_history_manager()._fetch_yahoo_chart_history(symbol, days=45)
+            snapshot = self._build_daily_snapshot_from_history(config.get("history_key") or symbol, config, history)
+            if not snapshot:
+                return self._fetch_crypto_binance_fallback_snapshot(config, reason=reason)
+            snapshot.update({
+                "source": "yahoo_chart",
+                "actual_source_label": "Yahoo Finance Chart 备用源",
+                "actual_source_url": f"https://finance.yahoo.com/quote/{symbol}/",
+                "data_note": (
+                    "Coinbase Exchange公开接口暂不可用，本次使用 Yahoo Finance 免费行情备用源；"
+                    f"数据时点以返回日线为准。原因: {reason[:120]}"
+                ),
+                "timestamp": datetime.now().isoformat(),
+                "fetched_at": datetime.now().isoformat(),
+            })
+            return snapshot
+        except Exception as fallback_error:
+            print(f"Yahoo crypto fallback failed {symbol}: {fallback_error}")
+            return self._fetch_crypto_binance_fallback_snapshot(config, reason=reason or str(fallback_error))
+
+    def _fetch_crypto_binance_fallback_snapshot(self, config: dict, reason: str = "") -> dict | None:
+        product_id = config.get("symbol") or ""
+        pair = product_id.replace("-", "")
+        if pair.endswith("USD") and not pair.endswith("USDT"):
+            pair = pair[:-3] + "USDT"
+        if pair not in {"BTCUSDT", "ETHUSDT"}:
+            return None
+        endpoints = [
+            "https://data-api.binance.vision/api/v3/ticker/24hr",
+            "https://api.binance.us/api/v3/ticker/24hr",
+        ]
+        for endpoint in endpoints:
+            try:
+                response = self.session.get(
+                    endpoint,
+                    params={"symbol": pair},
+                    headers={**self.session.headers, "Accept": "application/json"},
+                    timeout=10,
+                )
+                response.raise_for_status()
+                payload = response.json()
+                price = self._parse_market_number(payload.get("lastPrice"))
+                if price <= 0:
+                    continue
+                change = self._parse_market_number(payload.get("priceChange"))
+                change_pct = self._parse_market_number(payload.get("priceChangePercent"))
+                prev_close = price - change if change else self._parse_market_number(payload.get("prevClosePrice") or payload.get("openPrice"))
+                close_time = payload.get("closeTime")
+                data_as_of = datetime.fromtimestamp(close_time / 1000).isoformat() if close_time else datetime.now().isoformat()
+                return {
+                    "name": config.get("name", product_id),
+                    "price": round(price, 2),
+                    "change": round(change, 2),
+                    "change_pct": round(change_pct, 2),
+                    "prev_close": round(prev_close or price, 2),
+                    "open": round(self._parse_market_number(payload.get("openPrice")) or price, 2),
+                    "high": round(self._parse_market_number(payload.get("highPrice")) or price, 2),
+                    "low": round(self._parse_market_number(payload.get("lowPrice")) or price, 2),
+                    "volume": self._parse_market_number(payload.get("volume")),
+                    "timestamp": datetime.now().isoformat(),
+                    "fetched_at": datetime.now().isoformat(),
+                    "data_as_of": data_as_of,
+                    "trade_date": data_as_of[:10],
+                    "source": "binance_public",
+                    "actual_source_label": "Binance 公共数据备用源",
+                    "actual_source_url": endpoint,
+                    "data_note": (
+                        "Coinbase Exchange公开接口暂不可用，本次使用 Binance 公共市场数据备用源；"
+                        f"数据时点以24h ticker返回时间为准。原因: {reason[:120]}"
+                    ),
+                }
+            except Exception as fallback_error:
+                print(f"Binance crypto fallback failed {pair}: {fallback_error}")
+                continue
+        return None
+
+    def _fetch_usdcny_snapshot(self, config: dict) -> dict | None:
+        rate = self._fetch_usdcny_rate()
+        if not rate:
+            return None
+        now = datetime.now().isoformat()
+        return {
+            "name": config.get("name", "USDCNY"),
+            "price": round(rate, 4),
+            "change": 0,
+            "change_pct": 0,
+            "prev_close": round(rate, 4),
+            "open": round(rate, 4),
+            "high": round(rate, 4),
+            "low": round(rate, 4),
+            "volume": 0,
+            "timestamp": now,
+            "fetched_at": now,
+            "data_as_of": now,
+            "trade_date": now[:10],
+        }
 
     def _parse_market_number(self, value) -> float:
         if value is None:
@@ -824,7 +1713,7 @@ class StockDataProvider:
                 change_pct = (change / prev_close * 100) if prev_close else 0
                 high = float(parts[6]) if len(parts) > 6 and parts[6] else 0
                 low = float(parts[7]) if len(parts) > 7 and parts[7] else 0
-                open_price = float(parts[8]) if len(parts) > 8 and parts[8] else price
+                open_price = float(parts[5]) if len(parts) > 5 and parts[5] else price
                 volume = 0
                 data_as_of = parts[3] if len(parts) > 3 and parts[3] else None
 
@@ -1498,21 +2387,55 @@ class StockDataProvider:
 
     def refresh_market_snapshot(self, force: bool = False) -> dict:
         """刷新实时行情快照，只保留真实数据"""
+        self.cache = {
+            key: value
+            for key, value in self.cache.items()
+            if key not in self.INDICES or self.INDICES[key].get("enabled", True) is not False
+        }
         if not force and self._is_snapshot_fresh():
             return self.cache
 
-        result = dict(self.cache)
+        result = {
+            key: value
+            for key, value in self.cache.items()
+            if (
+                key not in self.INDICES
+                or (
+                    self.INDICES[key].get("enabled", True) is not False
+                    and self._is_cached_snapshot_compatible(value, self.INDICES[key])
+                )
+            )
+        }
 
         for key, config in self.INDICES.items():
             if config.get("enabled", True) is False:
                 continue
 
-            cached = self.cache.get(key)
+            ttl = self._snapshot_ttl_for_config(config)
+            cached = self.cache.get(key) or self.db.load_snapshot(
+                key,
+                max_age_seconds=self.MAX_STALE_SECONDS,
+            )
+            if cached and not self._is_cached_snapshot_compatible(cached, config):
+                cached = None
+                result.pop(key, None)
+            fresh_cached = self.db.load_snapshot(key, max_age_seconds=ttl)
+            if fresh_cached and not self._is_cached_snapshot_compatible(fresh_cached, config):
+                fresh_cached = None
+            if fresh_cached and not force:
+                self._attach_history_series(key, fresh_cached)
+                self._attach_data_quality(fresh_cached)
+                result[key] = fresh_cached
+                print(f"  [DB-CACHE] {config['name']}: 使用本地数据库快照")
+                continue
+
             if (
                 config.get("update_frequency") == "daily"
                 and not force
                 and self._can_use_daily_cached_record(cached)
             ):
+                self._attach_history_series(key, cached)
+                self._attach_data_quality(cached)
                 result[key] = cached
                 print(f"  [DAILY-CACHE] {config['name']}: 使用当日已验证快照")
                 continue
@@ -1525,6 +2448,7 @@ class StockDataProvider:
 
             if data:
                 result[key] = self._build_index_result(key, config, data)
+                self.db.save_snapshot(key, result[key])
                 print(f"  [OK] {config['name']}: {data['price']}")
                 continue
 
@@ -1533,6 +2457,8 @@ class StockDataProvider:
                 cached["data_note"] = (
                     cached.get("data_note") or ""
                 ) + " 当前刷新失败，暂保留最近一次成功快照，避免标的从看板消失。"
+                self._attach_history_series(key, cached)
+                self._attach_data_quality(cached)
                 print(f"  [STALE] {config['name']}: 保留最近一次成功快照")
             else:
                 print(f"  [SKIP] {config['name']}: 暂无可验证的实时数据")
@@ -1551,6 +2477,9 @@ class StockDataProvider:
                     self.cache["GOLD"]["usd_cny"] = round(usd_cny, 4)
                     result = self.cache
 
+            for item_key, payload in self.cache.items():
+                self.db.save_snapshot(item_key, payload)
+
         return self.cache
 
     def get_all_indices(self, force_refresh: bool = False) -> dict:
@@ -1558,9 +2487,14 @@ class StockDataProvider:
         return self.refresh_market_snapshot(force=force_refresh)
 
     def _fetch_10y_closes(self, key: str) -> list | None:
-        """从 AKShare 拉近10年收盘价，用于历史分位计算。"""
+        """从本地历史缓存优先读取近10年收盘价，用于历史分位计算。"""
         config = self.INDICES.get(key, {})
         ten_years_ago = pd.Timestamp.now() - pd.DateOffset(years=10)
+        manager = get_history_manager()
+        rows = manager.get_history_data(key, "10y", series="price")
+        if rows and len(rows) >= 30:
+            return [{"date": r["date"], "close": r["close"]} for r in rows if r.get("close")]
+
         try:
             df = None
             source   = config.get("source", "")
@@ -1585,7 +2519,16 @@ class StockDataProvider:
             elif source == "deutsche_boerse":
                 # 使用 DAX ETF 历史价格做分位代理（走势与指数一致）
                 df = ak.index_us_stock_sina(symbol="DAX")
-            elif source in ("fund_nav", "chinabond", "us_treasury"):
+            elif source in (
+                "fund_nav",
+                "chinabond",
+                "us_treasury",
+                "computed_spread",
+                "ecb_yield",
+                "cboe_vix",
+                "history_snapshot",
+                "coinbase",
+            ):
                 mgr = get_history_manager()
                 rows = mgr.get_history_data(key, "10y")
                 if rows:
@@ -1627,7 +2570,12 @@ class StockDataProvider:
         years   = round(len(rows) / 252, 1)
 
         # 债券收益率：高收益率 = 债便宜（信号逻辑反向）
-        is_yield = key in {"CN10Y", "US10Y"}
+        is_yield = key in {
+            "CN10Y", "CN1Y", "CN30Y",
+            "US10Y", "US2Y", "US3M",
+            "EU10Y",
+            "CN10Y_1Y_SPREAD", "US10Y_2Y_SPREAD", "CN_US_10Y_SPREAD",
+        }
         if is_yield:
             if pct >= 80:
                 tone, label = "danger", "收益率高位"
@@ -1692,22 +2640,31 @@ class StockDataProvider:
 
         return valuation
 
+    def _cache_valuation_result(self, key: str, valuation: dict | None) -> dict | None:
+        if valuation:
+            self.db.save_valuation(key, valuation)
+        return valuation
+
     def get_valuation_data(self, key: str, current_price: float = None) -> dict:
         """只返回可验证的真实估值数据"""
+        cached = self.db.load_valuation(key, max_age_seconds=self.VALUATION_REFRESH_SECONDS)
+        if cached:
+            return cached
+
         if key in self.DAILY_VALUATION_KEYS:
-            return self._enrich_valuation_metadata(
+            return self._cache_valuation_result(
                 key,
                 self._decorate_valuation_signal(self.get_csindex_pe_valuation(key)),
             )
 
         if key in self.MULTPL_PE_KEYS:
-            return self._enrich_valuation_metadata(
+            return self._cache_valuation_result(
                 key,
                 self._decorate_valuation_signal(self.get_spx_pe_valuation()),
             )
 
         if key in self.PRICE_PERCENTILE_KEYS:
-            return self._enrich_valuation_metadata(key, self._compute_price_percentile_valuation(key))
+            return self._cache_valuation_result(key, self._compute_price_percentile_valuation(key))
 
         if key not in self.REALTIME_VALUATION_KEYS:
             return None
@@ -1719,7 +2676,7 @@ class StockDataProvider:
 
             official_daily_data = self.get_csindex_pe_valuation(key)
             if official_daily_data:
-                return self._enrich_valuation_metadata(
+                return self._cache_valuation_result(
                     key,
                     self._decorate_valuation_signal(official_daily_data),
                 )
@@ -1744,7 +2701,7 @@ class StockDataProvider:
                             realtime_data["pe_min"] = round(float(pe_values.min()), 2)
                             realtime_data["pe_max"] = round(float(pe_values.max()), 2)
                             realtime_data["pe_median"] = round(float(pe_values.median()), 2)
-                            realtime_data["pe_percentile"] = round((pe_values < current_pe).mean() * 100, 2)
+                            realtime_data["pe_percentile"] = round(float((pe_values < current_pe).mean() * 100), 2)
                             realtime_data["data_start"] = str(pe_data["日期"].min())
                             realtime_data["data_end"] = str(pe_data["日期"].max())
                             realtime_data["data_points"] = len(pe_data)
@@ -1752,7 +2709,7 @@ class StockDataProvider:
                 except Exception as exc:
                     print(f"  [{name}] 历史PE范围补全失败: {exc}")
 
-            return self._enrich_valuation_metadata(
+            return self._cache_valuation_result(
                 key,
                 self._decorate_valuation_signal(realtime_data),
             )
@@ -1799,13 +2756,12 @@ class StockDataProvider:
                 "pe_min": round(float(pe_values.min()), 2),
                 "pe_max": round(float(pe_values.max()), 2),
                 "pe_median": round(float(pe_values.median()), 2),
-                "pe_percentile": round((pe_values < current_pe).mean() * 100, 2),
+                "pe_percentile": round(float((pe_values < current_pe).mean() * 100), 2),
                 "data_start": data_start.strftime("%Y-%m-%d"),
                 "data_end": data_end.strftime("%Y-%m-%d"),
                 "data_points": len(pe_values),
                 "years_of_data": round((data_end - data_start).days / 365, 1),
                 "source": "中证指数官网",
-                "source_url": config.get("source_url", "https://www.csindex.com.cn/"),
                 "is_realtime": False,
                 "is_simulated": False,
                 "note": f"官方日频PE，截至 {data_end.strftime('%Y-%m-%d')}",
@@ -2290,13 +3246,20 @@ class StockDataProvider:
             traceback.print_exc()
             return None
 
-    def get_historical_data(self, key: str, period: str = "1mo", realtime_price: float = None) -> list:
+    def get_historical_data(
+        self,
+        key: str,
+        period: str = "1mo",
+        realtime_price: float = None,
+        series: str = "price",
+    ) -> list:
         """获取历史数据用于图表 - 带缓存机制
         
         Args:
             key: 指数代码
             period: 时间周期
             realtime_price: 实时价格（用于校准ETF-based指数的历史数据）
+            series: 历史序列口径，price=指数收益，total_return=全收益
         """
         try:
             config = self.INDICES.get(key)
@@ -2312,11 +3275,12 @@ class StockDataProvider:
 
             # 使用本地历史数据管理器获取数据（优先本地CSV，必要时从网络更新）
             manager = get_history_manager()
-            data = manager.get_history_data(key, period)
+            data = manager.get_history_data(key, period, series=series)
+            series_config = manager._get_series_config(key, series) or {}
 
             if data and len(data) > 0:
                 # ETF 代理品校准：把 ETF 价格乘以比值还原为指数点位
-                if config.get("history_etf_proxy") and self.cache.get(key):
+                if series == "price" and config.get("history_etf_proxy") and self.cache.get(key):
                     index_price = self.cache[key].get("price")
                     if index_price and data[-1].get("close"):
                         ratio = index_price / data[-1]["close"]
@@ -2330,33 +3294,14 @@ class StockDataProvider:
                             }
                             for row in data
                         ]
-                return self._decorate_history_rows(
-                    key,
-                    self._merge_realtime_snapshot_into_history(key, data),
-                )
+                if series == "price" and series_config.get("merge_snapshot", True) is not False:
+                    return self._merge_realtime_snapshot_into_history(key, data)
+                return data
             return []
             return []
         except Exception as e:
             print(f"获取历史数据失败 {key}: {e}")
             return []
-
-    def _decorate_history_rows(self, key: str, data: list) -> list:
-        """Attach chart-level metadata while keeping the API response as an array."""
-        if not data:
-            return data
-        config = self.INDICES.get(key, {})
-        if config.get("history_source_type") != "ETF_PROXY":
-            return data
-
-        note = "历史走势使用 ETF 代理数据，仅供趋势参考，不等同于中证指数官方历史点位。"
-        meta = {
-            "history_source_type": "ETF_PROXY",
-            "chart_badge": "ETF代理",
-            "data_note": note,
-            "history_note": note,
-            "history_proxy_symbol": config.get("history_etf_proxy"),
-        }
-        return [{**row, **meta} for row in data]
 
     def _merge_realtime_snapshot_into_history(self, key: str, data: list) -> list:
         """用当前已验证快照补齐图表最后一个交易日，避免卡片和图表不同步。"""
@@ -2394,13 +3339,19 @@ class StockDataProvider:
             existing_row.get("volume") if existing_row else None,
             snapshot.get("volume") or 0,
         )
+        provenance_row = existing_row or (data[-1] if data else {})
         row = {
+            **provenance_row,
             "date": trade_date,
             "open": round(float(open_value), 2),
             "high": round(float(max(high_candidates)), 2),
             "low": round(float(min(low_candidates)), 2),
             "close": round(float(snapshot["price"]), 2),
             "volume": int(float(volume_value or 0)),
+            "is_merged_snapshot": True,
+            "merged_from_snapshot_at": snapshot.get("fetched_at") or snapshot.get("timestamp"),
+            "merge_rule": "overwrite close only; keep history open/high/low/volume when available",
+            "data_as_of": snapshot.get("data_as_of") or trade_date,
         }
 
         merged = [item for item in data if item.get("date") != trade_date]
