@@ -198,12 +198,20 @@ class MarketCache:
         source: str | None = None,
         source_symbol: str | None = None,
         source_signature: str | None = None,
+        value_domain: str | None = None,
+        allow_negative: bool | None = None,
     ) -> None:
+        domain = (value_domain or "").strip().lower()
+        permits_non_positive = bool(allow_negative) or domain in {"spread", "rate", "yield"}
         normalized = []
         for row in rows or []:
             date = str(row.get("date") or "").strip()
-            close = self._number(row.get("close"))
-            if not date or close <= 0:
+            close = self._number(row.get("close"), None)
+            if not date or close is None:
+                continue
+            if source == "csindex_perf" and date == "1990-01-01":
+                continue
+            if not permits_non_positive and close <= 0:
                 continue
             open_value = self._number(row.get("open"), close)
             high = self._number(row.get("high"), close)
@@ -272,6 +280,22 @@ class MarketCache:
                     end_date,
                 ),
             )
+
+    def clear_history(self, key: str, series: str | None = None) -> None:
+        """Remove cached history rows/meta for one symbol or one symbol+series."""
+        with self._connect() as conn:
+            if series is None:
+                conn.execute("DELETE FROM history_points WHERE key = ?", (key,))
+                conn.execute("DELETE FROM history_meta WHERE key = ?", (key,))
+            else:
+                conn.execute(
+                    "DELETE FROM history_points WHERE key = ? AND series = ?",
+                    (key, series),
+                )
+                conn.execute(
+                    "DELETE FROM history_meta WHERE key = ? AND series = ?",
+                    (key, series),
+                )
 
     def get_history_meta(self, key: str, series: str) -> dict[str, Any] | None:
         with self._connect() as conn:
@@ -364,6 +388,14 @@ class MarketCache:
                     now,
                 ),
             )
+
+    def clear_valuation(self, key: str | None = None) -> None:
+        """Remove one valuation payload, or all valuation payloads."""
+        with self._connect() as conn:
+            if key is None:
+                conn.execute("DELETE FROM valuations")
+            else:
+                conn.execute("DELETE FROM valuations WHERE key = ?", (key,))
 
     def load_valuation(self, key: str, max_age_seconds: int | float | None = None) -> dict[str, Any] | None:
         with self._connect() as conn:

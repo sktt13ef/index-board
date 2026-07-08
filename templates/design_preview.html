@@ -54,9 +54,9 @@
             top: 0;
             z-index: 20;
             display: grid;
-            grid-template-columns: minmax(170px, 1fr) auto minmax(170px, 1fr);
+            grid-template-columns: max-content minmax(0, 1fr) max-content;
             align-items: center;
-            gap: 20px;
+            gap: 18px;
             height: 58px;
             margin-bottom: 18px;
             background: rgba(255, 255, 255, .82);
@@ -88,7 +88,9 @@
         .tabs {
             display: inline-flex;
             align-items: center;
+            justify-self: center;
             gap: 4px;
+            max-width: 100%;
             padding: 4px;
             border: 1px solid var(--line);
             border-radius: 14px;
@@ -119,7 +121,9 @@
             display: flex;
             justify-content: flex-end;
             align-items: center;
-            gap: 9px;
+            justify-self: end;
+            gap: 8px;
+            min-width: max-content;
         }
 
         .live {
@@ -129,7 +133,21 @@
             color: var(--muted);
             font-size: 12px;
             font-weight: 800;
-            margin-right: 6px;
+            white-space: nowrap;
+        }
+
+        .data-updated {
+            display: inline-flex;
+            align-items: center;
+            min-height: 28px;
+            padding: 0 9px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, .74);
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 850;
+            white-space: nowrap;
         }
 
         .dot {
@@ -632,6 +650,15 @@
                 overflow: visible;
             }
 
+            .tools {
+                min-width: 0;
+                flex-wrap: wrap;
+            }
+
+            .data-updated {
+                flex: 0 0 auto;
+            }
+
             .summary {
                 grid-template-columns: 1fr;
             }
@@ -698,6 +725,8 @@
 
             <div class="tools">
                 <div class="live"><span class="dot" id="live-dot"></span><span id="conn-txt">实时连接</span></div>
+                <div class="data-updated" id="beijing-time">北京时间 --</div>
+                <div class="data-updated" id="data-updated">数据更新时间 --</div>
                 <button class="icon-btn lang-btn" id="language-toggle" title="Switch language">EN</button>
                 <button class="icon-btn" id="refresh" title="刷新">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -799,6 +828,10 @@
                 connected: "实时连接",
                 disconnected: "连接断开",
                 refresh: "刷新",
+                beijingTime: "北京",
+                beijingTimeEmpty: "北京 --",
+                dataUpdated: "数据",
+                dataUpdatedEmpty: "数据 --",
                 switchLanguage: "Switch to English",
                 filters: {
                     all: "全部",
@@ -889,6 +922,10 @@
                 connected: "Live",
                 disconnected: "Disconnected",
                 refresh: "Refresh",
+                beijingTime: "Beijing",
+                beijingTimeEmpty: "Beijing --",
+                dataUpdated: "Data",
+                dataUpdatedEmpty: "Data --",
                 switchLanguage: "切换到中文",
                 filters: {
                     all: "All",
@@ -1169,6 +1206,25 @@
             return seriesLabelI18n[label] || tr(`series.${seriesKey}`) || label;
         }
 
+        function localizedReturnKind(kind, fallback) {
+            const zh = {
+                official_total_return: "官方全收益",
+                etf_proxy: "ETF代理收益",
+                fund_nav: "基金累计净值",
+                same_source_price: "同源价格",
+                none: "无全收益口径",
+            };
+            const en = {
+                official_total_return: "Official TR",
+                etf_proxy: "ETF Proxy",
+                fund_nav: "Fund NAV",
+                same_source_price: "Same-source Price",
+                none: "No TR",
+            };
+            const map = lang === "zh" ? zh : en;
+            return map[kind] || fallback || map.none;
+        }
+
         function localizedFlag(flag) {
             return tr(`flags.${flag}`) === `flags.${flag}` ? flag : tr(`flags.${flag}`);
         }
@@ -1196,6 +1252,86 @@
             return label === `filters.${type}` ? market(type).label : label;
         }
 
+        function parseDataTime(value) {
+            if (!value) return null;
+            const date = new Date(value);
+            return Number.isNaN(date.getTime()) ? null : date;
+        }
+
+        function formatDateTime(date) {
+            const pad = value => String(value).padStart(2, "0");
+            return [
+                date.getFullYear(),
+                pad(date.getMonth() + 1),
+                pad(date.getDate()),
+            ].join("-") + " " + [
+                pad(date.getHours()),
+                pad(date.getMinutes()),
+                pad(date.getSeconds()),
+            ].join(":");
+        }
+
+        function formatCompactDateTime(date) {
+            const pad = value => String(value).padStart(2, "0");
+            return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+        }
+
+        function latestDataUpdateTime() {
+            let latest = null;
+            Object.values(stocks || {}).forEach(item => {
+                ["fetched_at", "timestamp", "_cache_updated_at"].forEach(field => {
+                    const date = parseDataTime(item?.[field]);
+                    if (date && (!latest || date > latest)) latest = date;
+                });
+            });
+            return latest;
+        }
+
+        function updateDataUpdatedLabel() {
+            const node = document.getElementById("data-updated");
+            if (!node) return;
+            const latest = latestDataUpdateTime();
+            node.textContent = latest ? `${tr("dataUpdated")} ${formatCompactDateTime(latest)}` : tr("dataUpdatedEmpty");
+            node.title = latest
+                ? `${lang === "zh" ? "当前看板返回数据中的最新获取时间" : "Latest fetch time among returned dashboard data"}: ${formatDateTime(latest)}`
+                : "";
+        }
+
+        function beijingDateTimeParts(date = new Date()) {
+            const parts = new Intl.DateTimeFormat("zh-CN", {
+                timeZone: "Asia/Shanghai",
+                hour12: false,
+                hourCycle: "h23",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+            }).formatToParts(date).reduce((acc, part) => {
+                acc[part.type] = part.value;
+                return acc;
+            }, {});
+            return parts;
+        }
+
+        function formatBeijingDateTime(date = new Date()) {
+            const parts = beijingDateTimeParts(date);
+            return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+        }
+
+        function formatBeijingClock(date = new Date()) {
+            const parts = beijingDateTimeParts(date);
+            return `${parts.hour}:${parts.minute}:${parts.second}`;
+        }
+
+        function updateBeijingTimeLabel() {
+            const node = document.getElementById("beijing-time");
+            if (!node) return;
+            node.textContent = `${tr("beijingTime")} ${formatBeijingClock()}`;
+            node.title = `${lang === "zh" ? "当前北京时间，每秒自动刷新" : "Current Beijing time, updated every second"}: ${formatBeijingDateTime()}`;
+        }
+
         function applyLanguage() {
             document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
             document.title = lang === "zh" ? "市场看板" : "Market Board";
@@ -1204,6 +1340,8 @@
             document.getElementById("language-toggle").title = tr("switchLanguage");
             document.getElementById("refresh").title = tr("refresh");
             document.getElementById("conn-txt").textContent = socketConnected ? tr("connected") : tr("disconnected");
+            updateBeijingTimeLabel();
+            updateDataUpdatedLabel();
             document.querySelectorAll("#filter .tab").forEach(btn => {
                 btn.textContent = tr(`filters.${btn.dataset.filter}`);
             });
@@ -1343,7 +1481,10 @@
                 const yrs = v.years_of_data || "";
                 const pct = v.price_percentile ?? "--";
                 const label = localizedSignal(v.signal_label || "历史分位");
-                const yearsText = lang === "zh" ? `${yrs}年分位` : `${yrs}${tr("valuation.yearsPercentile")}`;
+                const isYield = v.valuation_type === "yield_percentile";
+                const yearsText = lang === "zh"
+                    ? `${yrs}年${isYield ? "收益率/利差分位" : "价格分位"}`
+                    : `${yrs}${isYield ? "Y yield/spread pct." : tr("valuation.yearsPercentile")}`;
                 return `<span>${yearsText} <strong>${pct}%</strong></span><span>${label}</span>`;
             }
             if (v.pe == null) return "";
@@ -1365,8 +1506,15 @@
         function seriesOptions(d) {
             const configured = d && d.history_series ? d.history_series : {};
             return fixedSeriesOptions.filter(item => {
-                if (item.key === "total_return" || item.key === "both") {
-                    return Boolean(configured.total_return);
+                if (item.key === "total_return") {
+                    return Boolean(configured.total_return && configured.total_return.has_data);
+                }
+                if (item.key === "both") {
+                    return Boolean(
+                        configured.total_return &&
+                        configured.total_return.has_data &&
+                        configured.total_return.can_compare_total_return
+                    );
                 }
                 if (item.key === "dividend_return" || item.key === "dividend_yield") {
                     const dividendSeries = configured[item.key];
@@ -1379,10 +1527,14 @@
                 return {
                     ...item,
                     rawLabel,
-                    label: localizedSeriesLabel(item.key, rawLabel),
+                    label: item.key === "total_return" && cfg.return_kind
+                        ? localizedReturnKind(cfg.return_kind, cfg.return_kind_label || rawLabel)
+                        : localizedSeriesLabel(item.key, rawLabel),
                     trust: cfg.trust || null,
                     source: cfg.source || "",
                     symbol: cfg.symbol || "",
+                    return_kind: cfg.return_kind || "none",
+                    can_compare_total_return: Boolean(cfg.can_compare_total_return),
                 };
             });
         }
@@ -1471,7 +1623,8 @@
         function updatePeriodTabs(d) {
             const tabs = document.getElementById("period-tabs");
             const activeSeries = seriesOptions(d).find(item => item.key === series);
-            const seriesConfig = activeSeries && d.history_series ? d.history_series[activeSeries.key] : null;
+            const seriesConfigKey = activeSeries && activeSeries.key === "both" ? "total_return" : activeSeries && activeSeries.key;
+            const seriesConfig = seriesConfigKey && d.history_series ? d.history_series[seriesConfigKey] : null;
             const allowed = seriesConfig && seriesConfig.allowed_periods && seriesConfig.allowed_periods.length
                 ? seriesConfig.allowed_periods
                 : (d.allowed_periods && d.allowed_periods.length ? d.allowed_periods : fixedPeriodOptions.map(item => item.key));
@@ -1817,6 +1970,7 @@
             if (force) chartCache.clear();
             const res = await fetch(`/api/stocks${force ? "?refresh=1" : ""}`);
             stocks = await res.json();
+            updateDataUpdatedLabel();
             render();
             if (!selected) {
                 const preferred = stocks.CSI300_DIVIDEND_LOW_VOL ? "CSI300_DIVIDEND_LOW_VOL" : Object.keys(stocks)[0];
@@ -1881,6 +2035,7 @@
 
             socket.on("stock_update", data => {
                 stocks = data;
+                updateDataUpdatedLabel();
                 render();
                 const entries = visibleEntries();
                 if (selected && stocks[selected]) {
@@ -1894,6 +2049,8 @@
         }
 
         applyLanguage();
+        updateBeijingTimeLabel();
+        setInterval(updateBeijingTimeLabel, 1000);
         loadStocks();
     </script>
 </body>

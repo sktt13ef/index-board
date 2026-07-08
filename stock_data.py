@@ -607,11 +607,12 @@ class StockDataProvider:
             "type": "fx",
             "currency": "",
             "source": "usdcny",
+            "history_key": "USDCNY",
             "update_frequency": "realtime",
             "source_label": "新浪财经外汇快照",
             "source_url": "https://finance.sina.com.cn/money/forex/",
             "data_note": "免费外汇快照；仅用于跨市场换算参考，以返回时点为准。",
-            "history_available": False,
+            "history_available": True,
         },
         "BTCUSD": {
             "name": "比特币",
@@ -789,15 +790,9 @@ class StockDataProvider:
         }
 
     def _is_snapshot_fresh(self) -> bool:
-        if not self.cache or not self.last_update:
-            return False
-        for key, config in self.INDICES.items():
-            if config.get("enabled", True) is False:
-                continue
-            cached = self.cache.get(key)
-            if not cached or not self._is_cached_snapshot_compatible(cached, config):
-                return False
-        return (datetime.now() - self.last_update).total_seconds() < self.SNAPSHOT_TTL_SECONDS
+        # Per-symbol TTL and source rules are stricter than a single global
+        # in-memory timestamp, especially for daily official series after close.
+        return False
 
     def _snapshot_ttl_for_config(self, config: dict) -> int:
         if config.get("update_frequency") == "daily":
@@ -928,13 +923,16 @@ class StockDataProvider:
             series_meta = {}
             for series_key, series_cfg in history_config["series"].items():
                 series_config = manager._get_series_config(key, series_key) or {}
+                history_meta = manager.history_meta(key, series_key)
                 source = series_config.get("source", history_config.get("source"))
                 allowed_periods = [
                     period
                     for period in manager.PERIOD_DAYS
                     if manager._is_period_supported(series_config, period)
                 ]
-                has_data = True
+                if history_meta.get("allowed_periods"):
+                    allowed_periods = history_meta["allowed_periods"]
+                has_data = bool(history_meta.get("has_data"))
                 if series_key in {"dividend_return", "dividend_yield"}:
                     # Do not expose a dividend-yield tab unless we have real rows
                     # cached locally. Empty derived/official controls are worse
@@ -943,6 +941,8 @@ class StockDataProvider:
                     if not rows:
                         rows = manager.get_history_data(key, "1mo", series=series_key) or []
                     has_data = bool(rows)
+                elif not has_data and series_key == "price":
+                    has_data = True
 
                 series_meta[series_key] = {
                     "label": series_cfg.get("label", series_key),
@@ -952,6 +952,15 @@ class StockDataProvider:
                     "history_max_period": series_config.get("history_max_period"),
                     "limited_history": bool(series_config.get("limited_history")),
                     "has_data": has_data,
+                    "series_kind": history_meta.get("series_kind"),
+                    "return_kind": history_meta.get("return_kind"),
+                    "return_kind_label": history_meta.get("return_kind_label"),
+                    "row_count": history_meta.get("row_count", 0),
+                    "data_start": history_meta.get("data_start"),
+                    "data_end": history_meta.get("data_end"),
+                    "years_of_data": history_meta.get("years_of_data", 0),
+                    "can_show_ten_year": history_meta.get("can_show_ten_year", False),
+                    "can_compare_total_return": history_meta.get("can_compare_total_return", False),
                     "trust": self._history_series_trust(
                         source,
                         series_cfg.get("label", series_key),
@@ -2422,6 +2431,12 @@ class StockDataProvider:
             fresh_cached = self.db.load_snapshot(key, max_age_seconds=ttl)
             if fresh_cached and not self._is_cached_snapshot_compatible(fresh_cached, config):
                 fresh_cached = None
+            if (
+                fresh_cached
+                and config.get("update_frequency") == "daily"
+                and not self._can_use_daily_cached_record(fresh_cached)
+            ):
+                fresh_cached = None
             if fresh_cached and not force:
                 self._attach_history_series(key, fresh_cached)
                 self._attach_data_quality(fresh_cached)
@@ -2454,9 +2469,9 @@ class StockDataProvider:
 
             if cached:
                 result[key] = cached
-                cached["data_note"] = (
-                    cached.get("data_note") or ""
-                ) + " 当前刷新失败，暂保留最近一次成功快照，避免标的从看板消失。"
+                fallback_note = "当前刷新失败，暂保留最近一次成功快照，避免标的从看板消失。"
+                current_note = cached.get("data_note") or ""
+                cached["data_note"] = current_note if fallback_note in current_note else f"{current_note} {fallback_note}".strip()
                 self._attach_history_series(key, cached)
                 self._attach_data_quality(cached)
                 print(f"  [STALE] {config['name']}: 保留最近一次成功快照")
@@ -2517,8 +2532,9 @@ class StockDataProvider:
             elif source == "nasdaq_official":
                 df = ak.index_us_stock_sina(symbol=".NDX")
             elif source == "deutsche_boerse":
-                # 使用 DAX ETF 历史价格做分位代理（走势与指数一致）
-                df = ak.index_us_stock_sina(symbol="DAX")
+                # DAX 价格分位只能使用已审计的 STOXX/Deutsche Börse 历史。
+                # 免费公开文件目前只有短窗口；禁止回退到 ETF/第三方代理来冒充十年分位。
+                return None
             elif source in (
                 "fund_nav",
                 "chinabond",
@@ -2561,7 +2577,7 @@ class StockDataProvider:
     def _compute_price_percentile_valuation(self, key: str) -> dict | None:
         """基于近10年收盘价/净值/收益率计算历史分位。"""
         rows = self._fetch_10y_closes(key)
-        if not rows or len(rows) < 30:
+        if not rows or len(rows) < 250:
             return None
 
         closes  = pd.Series([r["close"] for r in rows])
@@ -2593,6 +2609,7 @@ class StockDataProvider:
 
         config = self.INDICES.get(key, {})
         return {
+            "valuation_type": "yield_percentile" if is_yield else "price_percentile",
             "price_percentile": pct,
             "price_min":    round(float(closes.min()), 4),
             "price_max":    round(float(closes.max()), 4),
