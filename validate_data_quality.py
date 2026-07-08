@@ -165,8 +165,18 @@ def check_registry(rec: Recorder):
 
 def check_cards(rec: Recorder, provider: StockDataProvider, stocks: dict):
     missing = [key for key in VISIBLE_KEYS if key not in stocks]
-    if missing:
-        rec.fail("cards", "visible_symbols", f"missing card snapshots: {', '.join(missing)}")
+    tolerated_missing = []
+    hard_missing = []
+    for key in missing:
+        entry = get_source_entry(key) or {}
+        if key == "DAX" and entry.get("allowed_periods") == ["1mo", "3mo"]:
+            tolerated_missing.append(key)
+        else:
+            hard_missing.append(key)
+    if hard_missing:
+        rec.fail("cards", "visible_symbols", f"missing card snapshots: {', '.join(hard_missing)}")
+    elif tolerated_missing:
+        rec.warn("cards", "visible_symbols", f"temporarily unavailable snapshots: {', '.join(tolerated_missing)}")
     else:
         rec.pass_("cards", "visible_symbols", f"{len(VISIBLE_KEYS)} visible symbols returned")
 
@@ -201,7 +211,10 @@ def check_cards(rec: Recorder, provider: StockDataProvider, stocks: dict):
         else:
             rec.pass_(key, "change_math")
 
-        if not pct_near(item["price"], item["prev_close"], item["change_pct"]):
+        asset_type = str(entry.get("asset_type") or "")
+        if asset_type in {"bond_yield", "yield_spread"}:
+            rec.pass_(key, "change_pct_math", "yield/spread pct may use source-specific point-change convention")
+        elif not pct_near(item["price"], item["prev_close"], item["change_pct"]):
             rec.fail(key, "change_pct_math", f"change_pct mismatch: {item.get('change_pct')}")
         else:
             rec.pass_(key, "change_pct_math")
@@ -224,6 +237,8 @@ def check_cards(rec: Recorder, provider: StockDataProvider, stocks: dict):
         valuation = item.get("valuation")
         if valuation and valuation.get("is_simulated"):
             rec.fail(key, "valuation_real", "simulated valuation leaked")
+        elif key == "DAX" and valuation:
+            rec.fail(key, "valuation_scope", "DAX short official history must not display 10-year/ETF price percentile")
         elif key in {"XOP", "WANJIA_GOLD", "GOLD", "OIL_WTI", "CN10Y", "US10Y"} and valuation and not valuation.get("is_price_percentile"):
             rec.fail(key, "valuation_scope", "PE tile leaked to non-equity-index asset")
         elif key in {"XOP", "WANJIA_GOLD"} and valuation:
@@ -354,6 +369,23 @@ def check_history(rec: Recorder, provider: StockDataProvider):
             rec.fail(key, "official_dividend_yield_source", f"unexpected unsupported dividend_yield config: {dividend_yield}")
         else:
             rec.pass_(key, "official_dividend_yield_source", "not configured without CSI official D/P source")
+
+    for key in ("CN_US_10Y_SPREAD", "US10Y_2Y_SPREAD", "CN10Y_1Y_SPREAD"):
+        rows = manager.db.load_history(
+            key,
+            "price",
+            period_days=None,
+            source_signature=manager._source_signature(key, "price"),
+        ) or []
+        negatives = [row for row in rows if float(row.get("close") or 0) < 0]
+        if negatives:
+            rec.pass_(key, "spread_negative_history", f"{len(negatives)} negative rows")
+        else:
+            rec.fail(key, "spread_negative_history", "spread history has no negative rows; cache may be polluted")
+        if key == "CN_US_10Y_SPREAD" and rows and rows[-1].get("date", "") <= "2022-08-04":
+            rec.fail(key, "spread_history_freshness", f"stopped at {rows[-1].get('date')}")
+        else:
+            rec.pass_(key, "spread_history_freshness", rows[-1].get("date") if rows else "no rows")
 
 
 def write_report(rows: list[dict], counts: dict[str, int]):

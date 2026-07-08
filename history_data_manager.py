@@ -286,6 +286,15 @@ class HistoryDataManager:
                 "price": {"symbol": "STLFSI4", "source": "fred_csv", "label": "指数"}
             },
         },
+        "USDCNY": {
+            "name": "USD/CNY",
+            "symbol": "USDCNY",
+            "source": "frankfurter_fx",
+            "history_available": True,
+            "series": {
+                "price": {"symbol": "USDCNY", "source": "frankfurter_fx", "label": "Price Return", "base": "USD", "quote": "CNY"}
+            },
+        },
         "CSI_ALL_SHARE": {
             "name": "中证全指",
             "symbol": "000985",
@@ -452,6 +461,23 @@ class HistoryDataManager:
         suffix = "" if series == "price" else f"_{series}"
         return self.DATA_DIR / f"{key}{suffix}.csv"
 
+    def clear_local_data(self, key: str, series: str | None = None) -> None:
+        """Remove SQLite, CSV, and JSON metadata for a history key/series."""
+        series_names = [series] if series else list((self.INDICES.get(key, {}).get("series") or {"price": {}}).keys())
+        if series is None:
+            self.db.clear_history(key)
+        for series_name in series_names:
+            if series is not None:
+                self.db.clear_history(key, series_name)
+            file_path = self._get_file_path(key, series_name)
+            try:
+                if file_path.exists():
+                    file_path.unlink()
+            except Exception:
+                pass
+            self.meta.pop(self._meta_key(key, series_name), None)
+        self._save_meta()
+
     def _get_series_config(self, key: str, series: str = "price") -> dict | None:
         config = self.INDICES.get(key)
         if not config:
@@ -468,7 +494,115 @@ class HistoryDataManager:
         elif series != "price":
             return None
 
+        merged.setdefault("series_kind", self._infer_series_kind(series, merged))
+        merged.setdefault("return_kind", self._infer_return_kind(series, merged))
         return merged
+
+    @staticmethod
+    def _infer_series_kind(series: str, config: dict) -> str:
+        source = config.get("source")
+        if source == "computed_spread":
+            return "spread"
+        if source in {"chinabond", "us_treasury", "ecb_yield"}:
+            return "yield"
+        if series in {"total_return", "dividend_return", "dividend_yield"}:
+            return series
+        return "price"
+
+    @staticmethod
+    def _infer_return_kind(series: str, config: dict) -> str:
+        if series == "total_return":
+            source = config.get("source")
+            if source in {"csindex_perf", "cni_official", "stoxx_dax", "lse_dory"}:
+                return "official_total_return"
+            if source in {"fund_nav", "fund_nav_accum"}:
+                return "fund_nav"
+            if source in {"yahoo_chart", "hk_sina", "tx"}:
+                return "etf_proxy"
+            return "none"
+        if series == "dividend_return":
+            return "official_total_return"
+        if series == "dividend_yield":
+            return "none"
+        if config.get("source") in {"fund_nav", "fund_nav_accum"}:
+            return "fund_nav"
+        return "none"
+
+    @staticmethod
+    def _return_kind_label(return_kind: str) -> str:
+        return {
+            "official_total_return": "官方全收益",
+            "etf_proxy": "ETF代理收益",
+            "fund_nav": "基金累计净值",
+            "same_source_price": "同源价格",
+            "none": "无全收益口径",
+        }.get(return_kind or "none", "无全收益口径")
+
+    def history_meta(self, key: str, series: str = "price") -> dict:
+        config = self._get_series_config(key, series) or {}
+        db_meta = self.db.get_history_meta(key, series) or {}
+        csv_meta = self.meta.get(self._meta_key(key, series), {})
+        date_range = csv_meta.get("date_range") or {}
+        row_count = int(db_meta.get("row_count") or csv_meta.get("record_count") or 0)
+        start_date = db_meta.get("start_date") or date_range.get("start")
+        end_date = db_meta.get("end_date") or date_range.get("end")
+        source = config.get("source")
+        series_kind = config.get("series_kind") or self._infer_series_kind(series, config)
+        return_kind = config.get("return_kind") or self._infer_return_kind(series, config)
+        available_periods = self._available_periods_for_meta(config, row_count, start_date, end_date)
+        return {
+            "series": series,
+            "label": config.get("label", series),
+            "symbol": config.get("symbol"),
+            "source": source,
+            "series_kind": series_kind,
+            "return_kind": return_kind,
+            "return_kind_label": self._return_kind_label(return_kind),
+            "row_count": row_count,
+            "data_start": start_date,
+            "data_end": end_date,
+            "years_of_data": round(row_count / 252, 1) if row_count else 0,
+            "allowed_periods": available_periods,
+            "history_max_period": config.get("history_max_period"),
+            "limited_history": bool(config.get("limited_history")),
+            "has_data": row_count > 0,
+            "can_show_ten_year": row_count >= 2500,
+            "can_compare_total_return": return_kind == "official_total_return",
+        }
+
+    def _available_periods_for_meta(
+        self,
+        config: dict,
+        row_count: int,
+        start_date: str | None,
+        end_date: str | None,
+    ) -> list[str]:
+        configured = [
+            period for period in self.PERIOD_DAYS
+            if self._is_period_supported(config, period)
+        ]
+        if not row_count or not start_date or not end_date:
+            return configured
+
+        try:
+            start = pd.to_datetime(start_date)
+            end = pd.to_datetime(end_date)
+            span_days = max(0, int((end - start).days))
+        except Exception:
+            span_days = int(row_count * 1.45)
+
+        result = []
+        for period in configured:
+            if period == "all":
+                if row_count >= 250:
+                    result.append(period)
+                continue
+            days = self._period_to_days(period)
+            if days is None:
+                continue
+            if span_days + 7 >= days and row_count >= min(250, max(1, int(days * 0.45))):
+                result.append(period)
+        return result or configured[:1]
 
     def _source_signature(self, key: str, series: str = "price") -> str:
         config = self._get_series_config(key, series) or {}
@@ -543,6 +677,7 @@ class HistoryDataManager:
             "ecb_yield": "European Central Bank",
             "cboe_vix": "Cboe",
             "fred_csv": "FRED",
+            "frankfurter_fx": "Frankfurter/ECB",
             "coinbase_candles": "Coinbase Exchange",
             "stoxx_dax": "STOXX/Deutsche Börse公开历史",
             "lse_dory": "London Stock Exchange / Refinitiv",
@@ -551,6 +686,8 @@ class HistoryDataManager:
             "fund_nav_accum": "东方财富基金累计净值",
         }.get(source, source or "unknown")
         label = config.get("label", series)
+        series_kind = config.get("series_kind") or self._infer_series_kind(series, config)
+        return_kind = config.get("return_kind") or self._infer_return_kind(series, config)
         is_proxy = "代理" in label
         is_same_source = "同源" in label
         is_official = source in {
@@ -574,9 +711,13 @@ class HistoryDataManager:
             "source_label": source_label,
             "source_type": source,
             "source_signature": self._source_signature(key, series),
+            "series_kind": series_kind,
+            "return_kind": return_kind,
+            "return_kind_label": self._return_kind_label(return_kind),
             "is_official": is_official,
             "is_proxy": is_proxy,
             "is_same_source": is_same_source,
+            "can_compare_total_return": return_kind == "official_total_return",
             "data_as_of": None,
             "source_url": registry.get("source_url", ""),
         }
@@ -592,9 +733,13 @@ class HistoryDataManager:
             item.setdefault("source_label", provenance["source_label"])
             item.setdefault("source_type", provenance["source_type"])
             item.setdefault("source_signature", provenance["source_signature"])
+            item.setdefault("series_kind", provenance["series_kind"])
+            item.setdefault("return_kind", provenance["return_kind"])
+            item.setdefault("return_kind_label", provenance["return_kind_label"])
             item.setdefault("is_official", provenance["is_official"])
             item.setdefault("is_proxy", provenance["is_proxy"])
             item.setdefault("is_same_source", provenance["is_same_source"])
+            item.setdefault("can_compare_total_return", provenance["can_compare_total_return"])
             item.setdefault("is_merged_snapshot", False)
             item.setdefault("merged_from_snapshot_at", None)
             item.setdefault("merge_rule", None)
@@ -704,6 +849,8 @@ class HistoryDataManager:
 
             cutoff_date = datetime.now() - timedelta(days=36500)
             df = df[df["date"] >= cutoff_date].sort_values("date")
+            if config.get("source") == "csindex_perf":
+                df = df[df["date"].dt.strftime("%Y-%m-%d") != "1990-01-01"]
             df.to_csv(file_path, index=False)
 
             merged_rows = []
@@ -727,6 +874,7 @@ class HistoryDataManager:
                 source=config.get("source"),
                 source_symbol=config.get("symbol"),
                 source_signature=signature,
+                value_domain=config.get("series_kind"),
             )
 
             self.meta[self._meta_key(key, series)] = {
@@ -1226,8 +1374,12 @@ class HistoryDataManager:
         if not components or len(components) != 2:
             return None
 
-        left_rows = self.get_history_data(components[0], period, series="price")
-        right_rows = self.get_history_data(components[1], period, series="price")
+        left_rows = self.load_local_data(components[0], period, series="price")
+        right_rows = self.load_local_data(components[1], period, series="price")
+        if not left_rows:
+            left_rows = self.get_history_data(components[0], period, series="price")
+        if not right_rows:
+            right_rows = self.get_history_data(components[1], period, series="price")
         if not left_rows or not right_rows:
             return None
 
@@ -1844,6 +1996,79 @@ class HistoryDataManager:
 
         return result or None
 
+    def _fetch_fred_csv_history(self, symbol: str, days: int | None = None) -> list | None:
+        """Fetch a daily FRED CSV series such as DEXCHUS for USD/CNY history."""
+        session = requests.Session()
+        session.trust_env = False
+        session.proxies = {"http": None, "https": None}
+        response = session.get(
+            "https://fred.stlouisfed.org/graph/fredgraph.csv",
+            params={"id": symbol},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=60,
+        )
+        response.raise_for_status()
+        df = pd.read_csv(BytesIO(response.content))
+        if df.empty or "observation_date" not in df.columns or symbol not in df.columns:
+            return None
+
+        df = df.rename(columns={"observation_date": "date", symbol: "close"})
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        df["close"] = pd.to_numeric(df["close"].replace(".", pd.NA), errors="coerce")
+        df = df.dropna(subset=["date", "close"])
+        if days is not None:
+            cutoff = pd.Timestamp.now() - pd.Timedelta(days=days)
+            df = df[df["date"] >= cutoff]
+
+        result = []
+        for _, row in df.sort_values("date").iterrows():
+            close = float(row["close"])
+            if close <= 0:
+                continue
+            result.append({
+                "date": row["date"].strftime("%Y-%m-%d"),
+                "open": round(close, 4),
+                "high": round(close, 4),
+                "low": round(close, 4),
+                "close": round(close, 4),
+                "volume": 0,
+            })
+        return result or None
+
+    def _fetch_frankfurter_fx_history(self, base: str, quote: str, days: int | None = None) -> list | None:
+        """Fetch daily FX history from Frankfurter, backed by ECB reference rates."""
+        end = datetime.now()
+        start = datetime(1999, 1, 1) if days is None else end - timedelta(days=days)
+        session = requests.Session()
+        session.trust_env = False
+        session.proxies = {"http": None, "https": None}
+        response = session.get(
+            f"https://api.frankfurter.app/{start.strftime('%Y-%m-%d')}..{end.strftime('%Y-%m-%d')}",
+            params={"from": base, "to": quote},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=60,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        rates = payload.get("rates") or {}
+        result = []
+        for date, row in sorted(rates.items()):
+            try:
+                close = float((row or {}).get(quote))
+            except Exception:
+                continue
+            if close <= 0:
+                continue
+            result.append({
+                "date": date,
+                "open": round(close, 4),
+                "high": round(close, 4),
+                "low": round(close, 4),
+                "close": round(close, 4),
+                "volume": 0,
+            })
+        return result or None
+
     def fetch_from_remote(self, key: str, series: str = "price", period: str = "all") -> list | None:
         config = self._get_series_config(key, series)
         if not config:
@@ -1891,6 +2116,16 @@ class HistoryDataManager:
             if source == "cboe_vix":
                 return self._fetch_cboe_vix_history()
 
+            if source == "fred_csv":
+                return self._fetch_fred_csv_history(symbol, days=days)
+
+            if source == "frankfurter_fx":
+                return self._fetch_frankfurter_fx_history(
+                    config.get("base", "USD"),
+                    config.get("quote", "CNY"),
+                    days=days,
+                )
+
             if source == "coinbase_candles":
                 return self._fetch_coinbase_candles(symbol, days=days)
 
@@ -1904,7 +2139,7 @@ class HistoryDataManager:
                 return self._fetch_lse_dory_history(symbol, days=days)
 
             if source == "csindex_perf":
-                return self._fetch_csindex_perf_history(symbol, days=days)
+                return self._fetch_csindex_perf_history(symbol, days=None)
 
             if source == "csindex_indicator":
                 return self._fetch_csindex_indicator_history(

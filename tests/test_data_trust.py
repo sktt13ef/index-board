@@ -1,6 +1,7 @@
 import inspect
 import subprocess
 import sys
+from datetime import datetime, timedelta
 
 from history_data_manager import HistoryDataManager
 from market_cache import MarketCache
@@ -56,6 +57,35 @@ def test_csi500_index_is_not_a500():
     assert registry["CSI500_INDEX"]["display_name"] == "中证500"
     assert series["price"]["symbol"] == "000905"
     assert series["total_return"]["symbol"] == "H00905"
+
+
+def test_broad_csi_indices_use_official_long_history_source():
+    manager = HistoryDataManager()
+    expected = {
+        "CSI500_INDEX": ("000905", "H00905"),
+        "CSI1000": ("000852", "H00852"),
+        "CSI2000": ("932000", "932000CNY010"),
+    }
+    for key, (price_code, total_code) in expected.items():
+        price = manager._get_series_config(key, "price")
+        total = manager._get_series_config(key, "total_return")
+        assert price["source"] == "csindex_perf"
+        assert price["symbol"] == price_code
+        assert total["source"] == "csindex_perf"
+        assert total["symbol"] == total_code
+
+
+def test_usdcny_history_uses_frankfurter_long_series():
+    manager = HistoryDataManager()
+    registry = get_source_registry()
+    config = manager._get_series_config("USDCNY", "price")
+    assert config["source"] == "frankfurter_fx"
+    assert config["symbol"] == "USDCNY"
+    assert config["base"] == "USD"
+    assert config["quote"] == "CNY"
+    assert registry["USDCNY"]["supports_chart"] is True
+    assert registry["USDCNY"]["history_source"] == "frankfurter_fx"
+    assert "all" in registry["USDCNY"]["allowed_periods"]
 
 
 def test_dividend_return_uses_official_total_return_derivation():
@@ -120,6 +150,25 @@ def test_dax_allowed_periods():
     assert not manager._is_period_supported(total_config, "6mo")
 
 
+def test_history_meta_exposes_return_kind_and_period_limits():
+    manager = HistoryDataManager()
+    total_meta = manager.history_meta("CSI_DIVIDEND", "total_return")
+    spread_meta = manager.history_meta("CN_US_10Y_SPREAD", "price")
+    assert total_meta["return_kind"] == "official_total_return"
+    assert total_meta["can_compare_total_return"] is True
+    assert spread_meta["series_kind"] == "spread"
+
+
+def test_price_percentile_requires_enough_history(monkeypatch):
+    provider = StockDataProvider()
+    short_rows = [
+        {"date": f"2026-01-{day:02d}", "close": 100 + day}
+        for day in range(1, 31)
+    ]
+    monkeypatch.setattr(provider, "_fetch_10y_closes", lambda key: short_rows)
+    assert provider._compute_price_percentile_valuation("DAX") is None
+
+
 def test_hstech_parser():
     source = inspect.getsource(StockDataProvider.get_sina_data)
     assert "price = float(parts[6])" in source
@@ -144,6 +193,44 @@ def test_cache_source_signature_invalidation(tmp_path):
     cache.save_history("T", "price", rows, source="unit", source_symbol="T", source_signature="sig-a")
     assert cache.load_history("T", "price", source_signature="sig-a")
     assert cache.load_history("T", "price", source_signature="sig-b") is None
+
+
+def test_cache_keeps_negative_spreads_but_filters_bad_prices(tmp_path):
+    cache = MarketCache(tmp_path / "cache.sqlite3")
+    rows = [
+        {"date": "2026-01-01", "open": -0.1, "high": -0.1, "low": -0.1, "close": -0.1, "volume": 0},
+        {"date": "2026-01-02", "open": 0, "high": 0, "low": 0, "close": 0, "volume": 0},
+        {"date": "2026-01-03", "open": 1, "high": 1, "low": 1, "close": 1, "volume": 0},
+    ]
+    cache.save_history("PRICE", "price", rows, value_domain="price")
+    price_rows = cache.load_history("PRICE", "price")
+    assert [row["close"] for row in price_rows] == [1.0]
+
+    cache.save_history("SPREAD", "price", rows, value_domain="spread")
+    spread_rows = cache.load_history("SPREAD", "price")
+    assert [row["close"] for row in spread_rows] == [-0.1, 0.0, 1.0]
+
+
+def test_cache_filters_csindex_placeholder_date(tmp_path):
+    cache = MarketCache(tmp_path / "cache.sqlite3")
+    rows = [
+        {"date": "1990-01-01", "open": 1, "high": 1, "low": 1, "close": 1, "volume": 0},
+        {"date": "2004-12-31", "open": 2, "high": 2, "low": 2, "close": 2, "volume": 0},
+    ]
+    cache.save_history("CSI", "price", rows, source="csindex_perf", value_domain="price")
+    saved = cache.load_history("CSI", "price")
+    assert [row["date"] for row in saved] == ["2004-12-31"]
+
+
+def test_history_depth_rebuild_list_covers_short_official_series():
+    from repair_history_depth import REBUILD_SERIES
+
+    assert ("CSI300", "total_return") in REBUILD_SERIES
+    assert ("CSI_ALL_SHARE", "total_return") in REBUILD_SERIES
+    assert ("CSI_BAIJIU", "total_return") in REBUILD_SERIES
+    assert ("STAR50", "total_return") in REBUILD_SERIES
+    assert ("STAR100", "total_return") in REBUILD_SERIES
+    assert ("FTSE100", "total_return") in REBUILD_SERIES
 
 
 def test_history_merge_marks_snapshot():
@@ -175,6 +262,21 @@ def test_history_merge_marks_snapshot():
     assert merged[-1]["is_merged_snapshot"] is True
     assert merged[-1]["merged_from_snapshot_at"] == "2026-01-02T15:00:00"
     assert "overwrite close only" in merged[-1]["merge_rule"]
+
+
+def test_daily_payload_freshness_uses_payload_timestamp():
+    provider = StockDataProvider()
+    stale_payload = {
+        "timestamp": (datetime.now() - timedelta(hours=2)).isoformat(),
+        "fetched_at": (datetime.now() - timedelta(hours=2)).isoformat(),
+    }
+    fresh_payload = {
+        "timestamp": datetime.now().isoformat(),
+        "fetched_at": datetime.now().isoformat(),
+    }
+    assert provider._is_snapshot_fresh() is False
+    assert provider._can_use_daily_cached_record(stale_payload) is False
+    assert provider._can_use_daily_cached_record(fresh_payload) is True
 
 
 def test_validate_data_quality_exit_code():

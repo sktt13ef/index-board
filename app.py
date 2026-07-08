@@ -7,6 +7,7 @@ from flask_cors import CORS
 from stock_data import StockDataProvider
 from market_cache import get_market_cache
 from market_sources import get_source_registry
+from history_data_manager import get_history_manager
 
 
 def downsample_history(rows, max_points):
@@ -165,7 +166,13 @@ def get_history(key):
         max_points = 0
 
     data = stock_provider.get_historical_data(key, period, series=series)
-    return jsonify(downsample_history(data, max_points))
+    rows = downsample_history(data, max_points)
+    if request.args.get("include_meta") == "1":
+        return jsonify({
+            "rows": rows,
+            "meta": get_history_manager().history_meta(key, series),
+        })
+    return jsonify(rows)
 
 
 @app.route("/api/history")
@@ -184,7 +191,13 @@ def get_history_query():
         max_points = 0
 
     data = stock_provider.get_historical_data(key, period, series=series)
-    return jsonify(downsample_history(data, max_points))
+    rows = downsample_history(data, max_points)
+    if request.args.get("include_meta") == "1":
+        return jsonify({
+            "rows": rows,
+            "meta": get_history_manager().history_meta(key, series),
+        })
+    return jsonify(rows)
 
 
 @app.route("/api/history-compare/<key>")
@@ -199,8 +212,18 @@ def get_history_compare(key):
         max_points = 0
 
     price_rows = stock_provider.get_historical_data(key, period, series="price")
+    total_meta = get_history_manager().history_meta(key, "total_return")
+    if total_meta.get("return_kind") != "official_total_return":
+        return jsonify({
+            "price": downsample_history(price_rows, max_points),
+            "total": [],
+            "note": "total_return is not an official total-return series; compare view is disabled.",
+            "meta": {"price": get_history_manager().history_meta(key, "price"), "total_return": total_meta},
+        })
     total_rows = stock_provider.get_historical_data(key, period, series="total_return")
-    return jsonify(build_compare_history(price_rows, total_rows, max_points))
+    payload = build_compare_history(price_rows, total_rows, max_points)
+    payload["meta"] = {"price": get_history_manager().history_meta(key, "price"), "total_return": total_meta}
+    return jsonify(payload)
 
 
 @app.route("/api/valuation/<key>")

@@ -1,6 +1,6 @@
 # Stock Dashboard Data Sources
 
-**Updated**: 2026-06-30
+**Updated**: 2026-07-08
 
 Principles:
 - Official first.
@@ -50,6 +50,20 @@ Trust policy:
 
 ## Field Contract
 
+## FX History Note
+
+- `USDCNY`: card snapshot uses Sina free FX quote; chart history uses Frankfurter/ECB daily USD/CNY cross-rate history.
+- Local `USDCNY.price` coverage after rebuild: 6,774 rows, 2000-01-13 to 2026-07-03.
+- This is a historical chart source, not a real-time official PBOC midpoint feed.
+
+## History Depth Note
+
+- Rebuild script: `python repair_history_depth.py`.
+- Data start report: `python generate_data_start_report.py`.
+- CSI official total-return series rebuilt to full available history: `CSI300/H00300`, `CSI_ALL_SHARE/H00985`, `CSI_BAIJIU/H20539`, `STAR50/000688CNY01`, `STAR100/000698CNY010`, and `CSI500/000510CNY010`.
+- CSI placeholder rows dated `1990-01-01` are rejected at both parser/cache layers and removed from the rebuilt local database.
+- Still-short series are intentional and must remain visibly downgraded: CSI official dividend-yield indicator files currently expose only recent rows; DAX free official history is limited to the STOXX 3-month file; SPX/XOP price history is short because the stable backend source is currently unavailable in this environment.
+
 Frontend cards always display:
 - `update_label`: `实时` / `日更` / `延迟`
 - `source_label`: data source
@@ -67,6 +81,7 @@ The dashboard uses a local SQLite database to avoid pulling every remote source 
 - History tables: `history_meta` and `history_points`, storing daily OHLC rows by `key + series`.
 - Valuation table: `valuations`, storing PE / percentile payloads.
 - Status endpoint: `/api/cache/status`
+- Archived API snapshot: `data/archived_api_snapshot_2026-06-30.json`. It is a historical debug artifact, not the latest runtime source. Runtime data must come from SQLite snapshots/history plus live source refreshes.
 
 Cache TTL:
 
@@ -76,6 +91,13 @@ Cache TTL:
 - Valuations: 1 hour.
 
 History rows include a `source_signature` derived from source type, source symbol, and series code. If a symbol is moved to a different source, old local rows are treated as stale and refreshed instead of being reused under the new source label.
+
+History value-domain policy:
+
+- Price / index / NAV series reject non-positive closes before entering SQLite.
+- Yield, rate, and spread series allow zero and negative closes. This is required for `CN_US_10Y_SPREAD`, `US10Y_2Y_SPREAD`, and `CN10Y_1Y_SPREAD`.
+- Chart controls use stored history metadata (`row_count`, `data_start`, `data_end`, `available_periods`) and must not expose 10-year or since-inception buttons when the local series cannot support that period.
+- `series=total_return` carries an explicit return-kind label: official total return, ETF proxy, fund NAV, same-source price, or no total-return basis. Compare charts are enabled only for official total-return series.
 
 ## Chart Performance Policy
 
@@ -234,6 +256,7 @@ Deutsche Börse official page still provides the live close snapshot. For histor
 Current total-return policy, updated 2026-07-02:
 - DAX chart price series uses STOXX public `h_3mdaxk.txt` (`DAXK`, price index).
 - DAX chart total-return series uses STOXX public `h_3mdax.txt` (`DAX`, performance/total-return index).
+- DAX valuation/price percentile is disabled unless an audited local history series has at least 250 rows. The old ETF/third-party fallback is forbidden because it produced a polluted 17-47 range that is not a DAX point range.
 - FTSE100 chart price series uses the LSE page Refinitiv widget RIC `.FTSE`.
 - FTSE100 chart total-return series uses the LSE page Refinitiv widget RIC `.TRIUKX`; available history starts from the first returned date, currently 2017-10-06.
 - CAC40 remains price-only in the dashboard. Free CAC40 GR candidates tested so far are unstable, protected, or return only a single point/short window, so the dashboard does not fabricate a total-return line.
@@ -244,6 +267,8 @@ For wide indices with real PE history, the card shows:
 - current trailing PE
 - 10-year PE percentile
 - a DCA prompt badge
+
+For price / yield / spread percentile tiles, the card title must show the actual type and years of available data. If a series has fewer than 250 history rows, no percentile tile is shown.
 
 Default rule:
 - `pe_percentile <= 20`: red badge, show `加倍定投`
